@@ -494,23 +494,22 @@ def get_devices():
             if latest_data:
                 temperature = latest_data.temperature or 0
                 smoke_level = latest_data.smoke_value or 0
-                
+                light_level = latest_data.light_level or 0  # 添加光照传感器值
+
                 # Determine status based on sensor values (fire alarm logic)
                 flame_value = latest_data.flame_value or 1200  # Default normal flame value
                 humidity = latest_data.humidity or 60  # Default normal humidity value
-                
-                # Fire alarm logic with all 5 sensors
-                if (flame_value < 1000 or      # Low flame indicates fire
-                    smoke_level > 100 or       # High smoke
-                    temperature > 40 or        # High temperature
-                    humidity < 20 or           # Very low humidity (fire risk)
-                    humidity > 90):           # Very high humidity (electrical risk)
+
+                # Fire alarm logic - 与fire_alarm_oled.py保持一致
+                if (flame_value < 500 or       # 火焰传感器值低表示检测到火焰
+                    smoke_level < 1000 or      # MQ2烟雾传感器值低表示烟雾浓度高
+                    temperature > 40 or        # 温度过高
+                    light_level > 30):         # 光照过强
                     status = "警报"
-                elif (flame_value < 1100 or     # Low flame warning
-                      smoke_level > 50 or      # Moderate smoke
-                      temperature > 35 or      # High temperature warning
-                      humidity <= 30 or        # Low humidity warning (包含等于30)
-                      humidity > 80):          # High humidity warning
+                elif (flame_value < 1000 or     # 火焰传感器值偏低
+                      smoke_level < 1500 or    # 烟雾浓度中等
+                      temperature > 35 or      # 温度偏高
+                      light_level > 20):       # 光照偏强
                     status = "警告"
                 else:
                     status = "正常"
