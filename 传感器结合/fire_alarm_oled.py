@@ -66,7 +66,7 @@ MQTT_PORT = 1883
 # GPIO配置（用户指定接口）
 DHT11_PIN = 4
 FLAME_AO_PIN = 14  # 火焰传感器模拟输入
-FLAME_DO_PIN = 14  # 火焰传感器数字输入（用户指定）
+FLAME_DO_PIN = 14  # 火焰传感器使用GPIO14模拟输入
 MQ2_AO_PIN = 34   # MQ2烟雾传感器模拟输入
 MQ2_DO_PIN = 2    # MQ2烟雾传感器数字输入
 SOUND_AO_PIN = 13 # 声音传感器模拟输入
@@ -111,20 +111,21 @@ servo.duty(0)
 print("✅ 舵机初始化完成")
 
 # 初始化传感器
-print(f"初始化火焰传感器 - 引脚: {FLAME_DO_PIN}")
-# 使用与校准程序完全相同的初始化方式
-flame_do = Pin(FLAME_DO_PIN, Pin.IN)
+print(f"初始化火焰传感器 - 引脚: {FLAME_AO_PIN} (模拟模式)")
+# 使用ADC读取火焰传感器模拟值
+flame_ao = ADC(Pin(FLAME_AO_PIN))
 print("✅ 火焰传感器初始化成功")
 
 mq2_ao = ADC(Pin(MQ2_AO_PIN))
 mq2_do = Pin(MQ2_DO_PIN, Pin.IN)
 sound_do = Pin(SOUND_DO_PIN, Pin.IN)
 
-# 设置ADC衰减（火焰传感器使用数字模式，MQ2使用模拟模式）
+# 设置ADC衰减（火焰传感器使用模拟模式，MQ2使用模拟模式）
 print("设置ADC衰减...")
 try:
-    # 火焰传感器使用数字模式，不需要ADC衰减设置
-    print("✅ 火焰传感器使用数字模式")
+    # 火焰传感器设置ADC衰减
+    flame_ao.atten(flame_ao.ATTN_11DB)  # 0-3.3V范围
+    print("✅ 火焰传感器模拟模式设置成功")
 except Exception as e:
     print(f"火焰传感器设置失败: {e}")
 
@@ -139,9 +140,8 @@ print("✅ 传感器初始化完成")
 # 测试火焰传感器读取
 print("测试火焰传感器读取...")
 try:
-    test_flame_digital = flame_do.value()
-    test_flame_analog = 0 if test_flame_digital == 0 else 4095
-    print(f"✅ 火焰传感器测试读取成功: 数字={test_flame_digital}, 模拟={test_flame_analog}")
+    test_flame_value = flame_ao.read()
+    print(f"✅ 火焰传感器测试读取成功: 模拟值={test_flame_value}")
 except Exception as e:
     print(f"❌ 火焰传感器测试读取失败: {e}")
 
@@ -307,19 +307,18 @@ flame_backup_pin = 27  # 备用引脚
 flame_using_backup = False
 
 def read_flame():
-    """读取火焰传感器 - 简化版本，与校准程序逻辑一致"""
+    """读取火焰传感器 - 模拟模式"""
     try:
-        # 完全按照校准程序的方式读取
-        digital_value = flame_do.value()
+        # 读取模拟值
+        analog_value = flame_ao.read()
 
-        # 简单的状态显示
-        if digital_value == 0:
-            print(f"🔥 火焰传感器: {digital_value} (火焰)")
-        else:
-            print(f"✅ 火焰传感器: {digital_value} (正常)")
-
-        # 为了保持数据格式一致性，设置模拟值
-        analog_value = 0 if digital_value == 0 else 4095
+        # 根据模拟值判断火焰状态
+        if analog_value < 500:  # 检测到火焰
+            print(f"🔥 火焰传感器: {analog_value} (检测到火焰)")
+            digital_value = 0
+        else:  # 正常状态
+            print(f"✅ 火焰传感器: {analog_value} (正常)")
+            digital_value = 1
 
         return analog_value, digital_value
 
