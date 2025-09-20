@@ -112,33 +112,67 @@ def process_sensor_data(data):
     print("🔍 传感器读数:")
     print("-" * 40)
 
-    # 火焰传感器
+    # 火焰传感器 (模拟值: 0=火焰, 4095=正常)
     flame = data.get('flame')
     if flame is not None:
-        print(f"🔥 火焰传感器: {flame}")
+        flame_status = "🔥 检测到火焰" if flame == 0 else "✅ 正常"
+        print(f"🔥 火焰传感器: {flame} ({flame_status})")
     else:
         print("🔥 火焰传感器: 无数据")
 
-    # 烟雾传感器
+    # 烟雾传感器 (MQ2模拟值)
     smoke = data.get('smoke')
     if smoke is not None:
-        print(f"💨 烟雾传感器: {smoke}")
+        if smoke < 1000:
+            smoke_status = "🚨 浓度较高"
+        elif smoke < 1500:
+            smoke_status = "⚠️ 中等浓度"
+        else:
+            smoke_status = "✅ 空气清新"
+        print(f"💨 烟雾传感器: {smoke} ({smoke_status})")
     else:
         print("💨 烟雾传感器: 无数据")
 
     # 温度
     temperature = data.get('temperature')
     if temperature is not None:
-        print(f"🌡️ 温度: {temperature}°C")
+        if temperature > 40:
+            temp_status = "🚨 温度过高"
+        elif temperature > 35:
+            temp_status = "⚠️ 温度偏高"
+        else:
+            temp_status = "✅ 正常"
+        print(f"🌡️ 温度: {temperature}°C ({temp_status})")
     else:
         print("🌡️ 温度: 无数据")
 
     # 湿度
     humidity = data.get('humidity')
     if humidity is not None:
-        print(f"💧 湿度: {humidity}%")
+        if humidity > 70:
+            humidity_status = "💧 湿度较高"
+        elif humidity < 30:
+            humidity_status = "🏜️ 湿度偏低"
+        else:
+            humidity_status = "✅ 舒适"
+        print(f"💧 湿度: {humidity}% ({humidity_status})")
     else:
         print("💧 湿度: 无数据")
+
+    # 光照传感器 (BH1750)
+    light = data.get('light')
+    if light is not None:
+        if light < 10:
+            light_status = "🌙 昏暗"
+        elif light < 100:
+            light_status = "🏠 室内光线"
+        elif light < 1000:
+            light_status = "☁️ 明亮"
+        else:
+            light_status = "☀️ 强光"
+        print(f"💡 光照: {light}lux ({light_status})")
+    else:
+        print("💡 光照: 无数据")
 
     print()
 
@@ -168,10 +202,67 @@ def process_alert_data(data, topic):
     print(f"📝 警报信息: {message}")
 
     if alert_data:
-        print(f"🔥 火焰值: {alert_data.get('flame', 'N/A')}")
-        print(f"💨 烟雾值: {alert_data.get('smoke', 'N/A')}")
-        print(f"🌡️ 温度: {alert_data.get('temperature', 'N/A')}°C")
-        print(f"💧 湿度: {alert_data.get('humidity', 'N/A')}%")
+        # 火焰传感器状态
+        flame = alert_data.get('flame', 'N/A')
+        if flame != 'N/A':
+            flame_status = "🔥 检测到火焰" if flame == 0 else "✅ 正常"
+            print(f"🔥 火焰传感器: {flame} ({flame_status})")
+        else:
+            print(f"🔥 火焰传感器: {flame}")
+
+        # 烟雾传感器状态
+        smoke = alert_data.get('smoke', 'N/A')
+        if smoke != 'N/A':
+            if smoke < 1000:
+                smoke_status = "🚨 浓度较高"
+            elif smoke < 1500:
+                smoke_status = "⚠️ 中等浓度"
+            else:
+                smoke_status = "✅ 空气清新"
+            print(f"💨 烟雾传感器: {smoke} ({smoke_status})")
+        else:
+            print(f"💨 烟雾传感器: {smoke}")
+
+        # 温度状态
+        temp = alert_data.get('temperature', 'N/A')
+        if temp != 'N/A':
+            if temp > 40:
+                temp_status = "🚨 温度过高"
+            elif temp > 35:
+                temp_status = "⚠️ 温度偏高"
+            else:
+                temp_status = "✅ 正常"
+            print(f"🌡️ 温度: {temp}°C ({temp_status})")
+        else:
+            print(f"🌡️ 温度: {temp}°C")
+
+        # 湿度状态
+        humidity = alert_data.get('humidity', 'N/A')
+        if humidity != 'N/A':
+            if humidity > 70:
+                humidity_status = "💧 湿度较高"
+            elif humidity < 30:
+                humidity_status = "🏜️ 湿度偏低"
+            else:
+                humidity_status = "✅ 舒适"
+            print(f"💧 湿度: {humidity}% ({humidity_status})")
+        else:
+            print(f"💧 湿度: {humidity}%")
+
+        # 光照状态
+        light = alert_data.get('light', 'N/A')
+        if light != 'N/A':
+            if light < 10:
+                light_status = "🌙 昏暗"
+            elif light < 100:
+                light_status = "🏠 室内光线"
+            elif light < 1000:
+                light_status = "☁️ 明亮"
+            else:
+                light_status = "☀️ 强光"
+            print(f"💡 光照: {light}lux ({light_status})")
+        else:
+            print(f"💡 光照: {light}lux")
 
 def process_status_data(data):
     """处理设备状态数据"""
@@ -207,6 +298,15 @@ def main():
     print(f"🚨 警报主题: {ALERT_TOPIC}")
     print(f"📡 状态主题: {STATUS_TOPIC}")
     print("🎯 监控所有传感器数据、警报和设备状态")
+    print()
+    print("📊 数据格式说明:")
+    print("🔥 火焰传感器: 0=检测到火焰, 4095=正常")
+    print("💨 烟雾传感器: 0-4095 (值越低烟雾越浓)")
+    print("🌡️ 温度: 摄氏度 (°C)")
+    print("💧 湿度: 百分比 (%)")
+    print("💡 光照: lux (BH1750)")
+    print()
+    print("🚨 警报级别: normal(正常) / warning(警告) / alarm(警报)")
     print("=" * 60)
 
     # 创建MQTT客户端（使用兼容的API版本）
