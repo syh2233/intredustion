@@ -84,8 +84,8 @@ OLED_WIDTH = 128
 OLED_HEIGHT = 64
 
 # 舵机角度配置
-SERVO_SAFE_ANGLE = 0      # 安全位置（舵机关闭）
-SERVO_ALERT_ANGLE = 90    # 警报位置（舵机启动）
+SERVO_SAFE_ANGLE = 90      # 安全位置（舵机关闭）
+SERVO_ALERT_ANGLE = 0      # 警报位置（舵机启动）
 
 # ==================== 硬件初始化 ====================
 print("🔧 初始化硬件...")
@@ -413,9 +413,9 @@ def read_dht11():
         # 如果读取失败，返回默认值
         return 26, 50
 
-def check_fire_alarm(flame_analog, mq2_analog, temperature):
+def check_fire_alarm(flame_analog, mq2_analog, temperature, light_level):
     """火灾检测算法 - 使用实际传感器读数"""
-    if flame_analog is None and mq2_analog is None and temperature is None:
+    if flame_analog is None and mq2_analog is None and temperature is None and light_level is None:
         return "normal"
 
     # 警报条件（任一满足即触发）
@@ -433,6 +433,9 @@ def check_fire_alarm(flame_analog, mq2_analog, temperature):
     elif temperature is not None and temperature > 40:
         alarm_condition = True
         print(f"🌡️ 温度警报: temperature={temperature}")
+    elif light_level is not None and light_level > 30:
+        alarm_condition = True
+        print(f"💡 光照警报: light_level={light_level}")
 
     if alarm_condition:
         return "alarm"
@@ -450,6 +453,9 @@ def check_fire_alarm(flame_analog, mq2_analog, temperature):
     elif temperature is not None and temperature > 35:
         warning_condition = True
         print(f"🌡️ 温度警告: temperature={temperature}")
+    elif light_level is not None and light_level > 20:
+        warning_condition = True
+        print(f"💡 光照警告: light_level={light_level}")
 
     if warning_condition:
         return "warning"
@@ -496,13 +502,13 @@ class SystemStatus:
             return True
         return False
 
-    def check_danger(self, flame_analog, mq2_analog, mq2_digital, temperature):
+    def check_danger(self, flame_analog, mq2_analog, mq2_digital, temperature, light_level):
         """检查危险情况"""
         danger_detected = False
         danger_reason = ""
 
         # 检查火焰
-        if flame_analog is not None and flame_analog < 1000:
+        if flame_analog is not None and flame_analog < 500:
             danger_detected = True
             danger_reason = "火焰警报"
 
@@ -516,30 +522,45 @@ class SystemStatus:
             danger_detected = True
             danger_reason = "温度警报"
 
+        # 检查光照
+        elif light_level is not None and light_level > 30:
+            danger_detected = True
+            danger_reason = "光照警报"
+
         # 处理警报状态
         current_time = time.time()
         if danger_detected:
-            if current_time - self.last_alert_time > 2:  # 2秒内的警报算连续
-                self.alert_count = 0
+            # 不重置计数，继续累计
             self.last_alert_time = current_time
             self.alert_count += 1
+
+            print(f"📊 警报计数: {self.alert_count}/3, 原因: {danger_reason}")
 
             # 连续3次警报才启动舵机
             if self.alert_count >= 3:
                 if not self.servo_active:
                     self.set_servo_angle(SERVO_ALERT_ANGLE)
                     self.servo_active = True
-                    print(f"🚨 危险！{danger_reason}")
+                    print(f"🚨 危险！{danger_reason} - 启动舵机！")
+                    return "危险警报", danger_reason
+                else:
+                    # 舵机已经启动，继续显示警报状态
                     return "危险警报", danger_reason
             else:
                 return "警告中", f"{danger_reason}({self.alert_count}/3)"
         else:
-            self.alert_count = 0
-            if self.servo_active:
-                self.set_servo_angle(SERVO_SAFE_ANGLE)
-                self.servo_active = False
-                print("✅ 环境恢复正常")
-                return "恢复正常", "环境正常"
+            # 只有当环境真正正常（且舵机已启动）时才重置计数和关闭舵机
+            if current_time - self.last_alert_time > 3:
+                # 只有在舵机已经启动且环境正常超过3秒才重置
+                if self.servo_active:
+                    self.alert_count = 0
+                    self.set_servo_angle(SERVO_SAFE_ANGLE)
+                    self.servo_active = False
+                    print("✅ 环境恢复正常 - 舵机关闭")
+                    return "恢复正常", "环境正常"
+                else:
+                    # 舵机未启动，正常计数
+                    pass
 
         return "正常", "环境正常"
 
@@ -637,10 +658,10 @@ def main():
         light_level = read_bh1750()
 
         # 检查危险状态（原有逻辑）
-        status, reason = system_status.check_danger(flame_analog, mq2_analog, mq2_digital, temperature)
+        status, reason = system_status.check_danger(flame_analog, mq2_analog, mq2_digital, temperature, light_level)
 
         # 火灾报警检测（MQTT使用）
-        alarm_status = check_fire_alarm(flame_analog, mq2_analog, temperature)
+        alarm_status = check_fire_alarm(flame_analog, mq2_analog, temperature, light_level)
 
         # 显示数据
         sound_str = f"{sound_analog}" if sound_analog is not None else "N/A"
