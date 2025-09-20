@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Read(/mnt/c/手动D/行业实践/**)",
+      "Bash(sqlite3:*)",
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(pip3:*)",
+      "Bash(if:*)",
+      "Bash(/dev/null)",
+      "Bash(then)",
+      "Bash(xdg-open:*)",
+      "Bash(elif:*)",
+      "Bash(wslview:*)",
+      "Bash(else)",
+      "Bash(fi)",
+      "Bash(\"/mnt/c/手动D/行业实践/web/.venv/Scripts/python.exe\":*)",
+      "Read(//mnt/e/mos/mosquitto/**)",
+      "Bash(./mosquitto_pub.exe:*)",
+      "Bash(netstat:*)",
+      "Bash(powershell:*)",
+      "Bash(ss:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

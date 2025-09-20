@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\".venv/Scripts/python.exe\" websocket_test.py)",
+      "Bash(\".venv/Scripts/python.exe\" test_fire_alarm_scenarios.py)",
+      "Bash(\".venv/Scripts/python.exe\" test_realistic_scenarios.py)",
+      "Bash(\".venv/Scripts/python.exe\" test_quick_scenarios.py)",
+      "Bash(\".venv/Scripts/python.exe\":*)",
+      "Bash(netstat:*)",
+      "Bash(lsof:*)",
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(curl:*)",
+      "Bash(ss:*)",
+      "Bash(pkill:*)",
+      "Bash(python:*)",
+      "Bash(mosquitto:*)",
+      "Read(//mnt/c/Users/沈家/Downloads/**)",
+      "Bash(ipconfig:*)",
+      "Bash(findstr:*)",
+      "Bash(unzip:*)",
+      "Bash(telnet:*)",
+      "Bash(nc:*)",
+      "Bash(sudo systemctl:*)",
+      "Bash(pip install:*)",
+      "Bash(pip3 install:*)",
+      "Bash(source:*)",
+      "Bash(./.venv/Scripts/python.exe:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

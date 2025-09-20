@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32宿舍火灾报警系统架构图</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Microsoft YaHei', 'SimHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 30px;
+            max-width: 1200px;
+            width: 100%;
+        }
+        
+        .title {
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+            color: #2D3436;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .architecture {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: auto auto auto;
+            gap: 20px;
+            position: relative;
+        }
+        
+        .module {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            border: 3px solid;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .module:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+        }
+        
+        .module::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.8), rgba(255,255,255,0.3));
+        }
+        
+        .sensor-module {
+            border-color: #FF6B6B;
+            background: linear-gradient(135deg, #FF6B6B 0%, #FF8E8E 100%);
+            color: white;
+        }
+        
+        .processing-module {
+            border-color: #4ECDC4;
+            background: linear-gradient(135deg, #4ECDC4 0%, #6EE7DF 100%);
+            color: white;
+        }
+        
+        .display-module {
+            border-color: #45B7D1;
+            background: linear-gradient(135deg, #45B7D1 0%, #6BC5E8 100%);
+            color: white;
+        }
+        
+        .network-module {
+            border-color: #96CEB4;
+            background: linear-gradient(135deg, #96CEB4 0%, #A8D5C4 100%);
+            color: white;
+        }
+        
+        .web-module {
+            border-color: #FFEAA7;
+            background: linear-gradient(135deg, #FFEAA7 0%, #FFECB3 100%);
+            color: #2D3436;
+        }
+        
+        .esp32-core {
+            grid-column: 2;
+            grid-row: 2;
+            border-color: #E17055;
+            background: linear-gradient(135deg, #E17055 0%, #F39C76 100%);
+            color: white;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        
+        .module-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-align: center;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+        }
+        
+        .submodule {
+            background: rgba(255,255,255,0.9);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin: 5px 0;
+            font-size: 12px;
+            border-left: 4px solid;
+            transition: all 0.3s ease;
+        }
+        
+        .submodule:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .sensor-submodule {
+            border-left-color: #FF6B6B;
+            color: #2D3436;
+        }
+        
+        .processing-submodule {
+            border-left-color: #4ECDC4;
+            color: #2D3436;
+        }
+        
+        .display-submodule {
+            border-left-color: #45B7D1;
+            color: #2D3436;
+        }
+        
+        .network-submodule {
+            border-left-color: #96CEB4;
+            color: #2D3436;
+        }
+        
+        .web-submodule {
+            border-left-color: #FFEAA7;
+            color: #2D3436;
+        }
+        
+        .sensor-icons {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 10px;
+        }
+        
+        .sensor-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            font-size: 12px;
+        }
+        
+        .flame-icon {
+            background: #FF7675;
+        }
+        
+        .smoke-icon {
+            background: #74B9FF;
+        }
+        
+        .temp-icon {
+            background: #00B894;
+        }
+        
+        .connections {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        .arrow {
+            stroke: #74B9FF;
+            stroke-width: 3;
+            fill: none;
+            marker-end: url(#arrowhead);
+            opacity: 0.8;
+        }
+        
+        .data-label {
+            font-size: 11px;
+            fill: #2D3436;
+            font-weight: bold;
+            text-anchor: middle;
+        }
+        
+        .legend {
+            margin-top: 30px;
+            padding: 20px;
+            background: #F8F9FA;
+            border-radius: 10px;
+            border: 2px solid #E9ECEF;
+        }
+        
+        .legend-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #2D3436;
+        }
+        
+        .legend-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+        
+        @media (max-width: 768px) {
+            .architecture {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto;
+            }
+            
+            .esp32-core {
+                grid-column: 1;
+                grid-row: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">基于ESP32的宿舍火灾报警系统架构图</h1>
+        
+        <div class="architecture">
+            <!-- 传感器数据采集模块 -->
+            <div class="module sensor-module">
+                <div class="sensor-icons">
+                    <div class="sensor-icon flame-icon">火</div>
+                    <div class="sensor-icon smoke-icon">烟</div>
+                    <div class="sensor-icon temp-icon">温</div>
+                </div>
+                <div class="module-title">传感器数据采集模块</div>
+                <div class="submodule sensor-submodule">🔥 火焰传感器数据采集</div>
+                <div class="submodule sensor-submodule">💨 MQ-2烟雾传感器数据采集</div>
+                <div class="submodule sensor-submodule">🔧 数据滤波与预处理</div>
+            </div>
+            
+            <!-- 数据处理与判断模块 -->
+            <div class="module processing-module">
+                <div class="module-title">数据处理与判断模块</div>
+                <div class="submodule processing-submodule">📊 阈值判断算法</div>
+                <div class="submodule processing-submodule">🛡️ 防误报逻辑</div>
+                <div class="submodule processing-submodule">📋 报警状态管理</div>
+            </div>
+            
+            <!-- 本地显示与报警模块 -->
+            <div class="module display-module">
+                <div class="module-title">本地显示与报警模块</div>
+                <div class="submodule display-submodule">📺 OLED显示控制</div>
+                <div class="submodule display-submodule">🌀 风扇报警控制</div>
+                <div class="submodule display-submodule">💡 本地状态指示</div>
+            </div>
+            
+            <!-- ESP32核心控制器 -->
+            <div class="module esp32-core">
+                ESP32<br>主控制器
+            </div>
+            
+            <!-- 网络通信模块 -->
+            <div class="module network-module">
+                <div class="module-title">网络通信模块</div>
+                <div class="submodule network-submodule">📶 Wi-Fi连接管理</div>
+                <div class="submodule network-submodule">🌐 HTTP数据传输</div>
+                <div class="submodule network-submodule">📨 MQTT实时通信</div>
+                <div class="submodule network-submodule">🔄 断网重连机制</div>
+            </div>
+            
+            <!-- Web监控模块 -->
+            <div class="module web-module">
+                <div class="module-title">Web监控模块</div>
+                <div class="submodule web-submodule">📈 实时数据展示</div>
+                <div class="submodule web-submodule">📊 历史数据查询</div>
+                <div class="submodule web-submodule">🖥️ 设备状态监控</div>
+                <div class="submodule web-submodule">🚨 报警记录管理</div>
+            </div>
+            
+            <!-- SVG连接线 -->
+            <svg class="connections" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" 
+                            refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#74B9FF" />
+                    </marker>
+                </defs>
+                
+                <!-- 传感器到ESP32 -->
+                <path class="arrow" d="M 25 20 Q 40 35 50 50" />
+                
+                <!-- 数据处理到ESP32 -->
+                <path class="arrow" d="M 50 20 Q 50 35 50 45" />
+                
+                <!-- 显示报警到ESP32 -->
+                <path class="arrow" d="M 75 20 Q 65 35 50 50" />
+                
+                <!-- ESP32到网络通信 -->
+                <path class="arrow" d="M 50 55 Q 35 65 25 75" />
+                
+                <!-- 网络通信到Web监控 -->
+                <path class="arrow" d="M 50 75 L 75 75" />
+                
+                <!-- ESP32到显示报警 -->
+                <path class="arrow" d="M 55 50 Q 70 30 75 20" />
+                
+                <!-- 数据流向标签 -->
+                <text x="35" y="30" class="data-label">传感器数据</text>
+                <text x="50" y="35" class="data-label">处理结果</text>
+                <text x="65" y="30" class="data-label">控制指令</text>
+                <text x="35" y="65" class="data-label">网络数据</text>
+                <text x="65" y="70" class="data-label">Web数据</text>
+            </svg>
+        </div>
+        
+        <!-- 图例 -->
+        <div class="legend">
+            <div class="legend-title">模块功能说明</div>
+            <div class="legend-items">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #FF6B6B;"></div>
+                    <span>传感器数据采集：多传感器融合数据采集</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #4ECDC4;"></div>
+                    <span>数据处理判断：智能算法分析处理</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #45B7D1;"></div>
+                    <span>本地显示报警：现场声光报警提示</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #96CEB4;"></div>
+                    <span>网络通信：多种通信协议支持</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #FFEAA7;"></div>
+                    <span>Web监控：远程监控管理平台</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #E17055;"></div>
+                    <span>ESP32主控：系统核心控制器</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

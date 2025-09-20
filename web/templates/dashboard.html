@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>详细数据仪表板 - ESP32火灾报警系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <header class="header">
+            <h1><i class="fas fa-tachometer-alt"></i> 数据仪表板</h1>
+            <p>详细的传感器数据分析和可视化</p>
+            <div class="nav-links">
+                <a href="/" class="nav-link"><i class="fas fa-home"></i> 返回主页</a>
+            </div>
+        </header>
+
+        <!-- 实时图表 -->
+        <section class="charts-section">
+            <h2><i class="fas fa-chart-area"></i> 实时数据图表</h2>
+            
+            <div class="charts-grid">
+                <!-- 温度趋势图 -->
+                <div class="chart-container">
+                    <h3>温度趋势</h3>
+                    <canvas id="temperature-chart"></canvas>
+                </div>
+                
+                <!-- 烟雾水平图 -->
+                <div class="chart-container">
+                    <h3>烟雾水平</h3>
+                    <canvas id="smoke-chart"></canvas>
+                </div>
+                
+                <!-- 设备状态饼图 -->
+                <div class="chart-container">
+                    <h3>设备状态分布</h3>
+                    <canvas id="status-chart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- 详细设备信息 -->
+        <section class="device-details">
+            <h2><i class="fas fa-microchip"></i> 设备详细信息</h2>
+            
+            <div class="device-table-container">
+                <table class="device-table">
+                    <thead>
+                        <tr>
+                            <th>设备ID</th>
+                            <th>位置</th>
+                            <th>温度(°C)</th>
+                            <th>烟雾水平</th>
+                            <th>状态</th>
+                            <th>最后更新</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="device-table-body">
+                        <!-- 设备信息将通过JavaScript动态生成 -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- 系统统计 -->
+        <section class="system-stats">
+            <h2><i class="fas fa-chart-pie"></i> 系统统计</h2>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-microchip"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h4>总设备数</h4>
+                        <p class="stat-value" id="total-devices">4</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-thermometer-half"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h4>平均温度</h4>
+                        <p class="stat-value" id="avg-temperature">--°C</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-smoking"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h4>平均烟雾水平</h4>
+                        <p class="stat-value" id="avg-smoke">--</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h4>今日报警</h4>
+                        <p class="stat-value" id="today-alarms">0</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

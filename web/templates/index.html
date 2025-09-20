@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32宿舍火灾报警系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部标题 -->
+        <header class="header">
+            <h1><i class="fas fa-fire-extinguisher"></i> ESP32宿舍火灾报警系统</h1>
+            <p>实时监控 · 智能预警 · 安全保障</p>
+            <div class="header-actions">
+                <div class="system-status">
+                    <span class="status-indicator online"></span>
+                    <span>系统运行正常</span>
+                </div>
+                <div class="current-time" id="current-time"></div>
+            </div>
+        </header>
+
+        <!-- 实时监控面板 -->
+        <section class="main-monitoring">
+            <!-- 状态概览 -->
+            <div class="status-overview">
+                <div class="status-card normal clickable" onclick="showStatusDevices('normal')">
+                    <div class="status-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="status-info">
+                        <h3>正常</h3>
+                        <p id="normal-count">0</p>
+                        <small>设备数量</small>
+                    </div>
+                    <div class="click-hint">
+                        <i class="fas fa-mouse-pointer"></i>
+                    </div>
+                </div>
+                
+                <div class="status-card warning clickable" onclick="showStatusDevices('warning')">
+                    <div class="status-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="status-info">
+                        <h3>警告</h3>
+                        <p id="warning-count">0</p>
+                        <small>需要关注</small>
+                    </div>
+                    <div class="click-hint">
+                        <i class="fas fa-mouse-pointer"></i>
+                    </div>
+                </div>
+                
+                <div class="status-card alarm clickable" onclick="showStatusDevices('alarm')">
+                    <div class="status-icon">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <div class="status-info">
+                        <h3>警报</h3>
+                        <p id="alarm-count">0</p>
+                        <small>立即处理</small>
+                    </div>
+                    <div class="click-hint">
+                        <i class="fas fa-mouse-pointer"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 设备详情弹窗 -->
+            <div id="status-devices-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="modal-title">设备详情</h3>
+                        <span class="close" onclick="closeStatusDevicesModal()">&times;</span>
+                    </div>
+                    <div class="modal-body">
+                        <div id="status-devices-container" class="devices-grid">
+                            <!-- 设备卡片将在这里动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 实时数据图表 -->
+            <div class="charts-section">
+                <div class="chart-container large">
+                    <div class="chart-header">
+                        <h3><i class="fas fa-chart-line"></i> 实时传感器数据</h3>
+                        <div class="chart-controls">
+                            <button class="chart-btn active" data-chart="combined">综合视图</button>
+                            <button class="chart-btn" data-chart="temperature">温度</button>
+                            <button class="chart-btn" data-chart="humidity">湿度</button>
+                            <button class="chart-btn" data-chart="smoke">烟雾</button>
+                            <button class="chart-btn" data-chart="flame">火焰</button>
+                            <button class="chart-btn" data-chart="light">光照</button>
+                        </div>
+                    </div>
+                    <canvas id="realtime-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- 设备监控和报警历史并排布局 -->
+            <div class="monitoring-row">
+                <!-- 设备状态网格 -->
+                <div class="devices-section">
+                    <div class="section-header">
+                        <h3><i class="fas fa-microchip"></i> 设备监控</h3>
+                        <button class="refresh-btn" onclick="refreshDevices()">
+                            <i class="fas fa-sync-alt"></i> 刷新
+                        </button>
+                    </div>
+                    <div class="devices-grid" id="devices-container">
+                        <!-- 设备卡片将通过JavaScript动态生成 -->
+                    </div>
+                </div>
+
+                <!-- 报警历史 -->
+                <div class="alarm-section">
+                    <div class="section-header">
+                        <h3><i class="fas fa-history"></i> 最近报警</h3>
+                        <div class="alarm-stats">
+                            <span>今日: <strong id="today-alarms">0</strong></span>
+                            <span>本周: <strong id="week-alarms">0</strong></span>
+                        </div>
+                    </div>
+                    <div class="alarm-container" id="alarm-container">
+                        <!-- 报警记录将通过JavaScript动态生成 -->
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- 音频报警元素 -->
+    <audio id="alarm-sound" preload="auto">
+        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBzV8zvLZiTYIG2m98OScTgwOUarm7blmFgU7k9n1unEiBC13yO/eizEIHWq+8+OWT" type="audio/wav">
+    </audio>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
