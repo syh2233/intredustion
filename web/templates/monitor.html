@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT实时监控 - ESP32火灾报警系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .sensor-card {
+            transition: all 0.3s ease;
+        }
+        .sensor-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .status-normal { background: linear-gradient(135deg, #10b981, #059669); }
+        .status-warning { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .status-alarm { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .data-row {
+            animation: slideIn 0.5s ease-out;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- 导航栏 -->
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <i class="fas fa-fire text-red-500 text-2xl"></i>
+                    <h1 class="text-xl font-bold text-gray-800">ESP32火灾报警系统</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/" class="text-gray-600 hover:text-gray-800 px-3 py-2 rounded-md text-sm font-medium">
+                        <i class="fas fa-home mr-1"></i>首页
+                    </a>
+                    <a href="/dashboard" class="text-gray-600 hover:text-gray-800 px-3 py-2 rounded-md text-sm font-medium">
+                        <i class="fas fa-chart-line mr-1"></i>仪表板
+                    </a>
+                    <a href="/monitor" class="bg-blue-500 text-white px-3 py-2 rounded-md text-sm font-medium">
+                        <i class="fas fa-satellite-dish mr-1"></i>实时监控
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4 py-6">
+        <!-- 统计信息 -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <div class="bg-white rounded-lg shadow p-6 sensor-card">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                        <i class="fas fa-microchip text-2xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-600">在线设备</p>
+                        <p class="text-2xl font-semibold text-gray-900" id="deviceCount">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6 sensor-card">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-green-100 text-green-600">
+                        <i class="fas fa-check-circle text-2xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-600">正常状态</p>
+                        <p class="text-2xl font-semibold text-gray-900" id="normalCount">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6 sensor-card">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                        <i class="fas fa-exclamation-triangle text-2xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-600">警告状态</p>
+                        <p class="text-2xl font-semibold text-gray-900" id="warningCount">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6 sensor-card">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-red-100 text-red-600">
+                        <i class="fas fa-exclamation-circle text-2xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-600">警报状态</p>
+                        <p class="text-2xl font-semibold text-gray-900" id="alarmCount">0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 实时数据显示 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 实时数据流 -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900">
+                        <i class="fas fa-stream mr-2 text-blue-500"></i>实时数据流
+                    </h3>
+                    <p class="text-sm text-gray-600">最新的传感器数据包</p>
+                </div>
+                <div class="p-6">
+                    <div id="realTimeData" class="space-y-4 max-h-96 overflow-y-auto">
+                        <div class="text-center text-gray-500 py-8">
+                            <i class="fas fa-satellite-dish text-4xl mb-4"></i>
+                            <p>等待MQTT数据...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 警报信息 -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900">
+                        <i class="fas fa-bell mr-2 text-red-500"></i>警报信息
+                    </h3>
+                    <p class="text-sm text-gray-600">最近的警报记录</p>
+                </div>
+                <div class="p-6">
+                    <div id="alertData" class="space-y-4 max-h-96 overflow-y-auto">
+                        <div class="text-center text-gray-500 py-8">
+                            <i class="fas fa-shield-alt text-4xl mb-4"></i>
+                            <p>暂无警报信息</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设备状态 -->
+        <div class="mt-6 bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">
+                    <i class="fas fa-server mr-2 text-green-500"></i>设备状态
+                </h3>
+                <p class="text-sm text-gray-600">所有连接设备的实时状态</p>
+            </div>
+            <div class="p-6">
+                <div id="deviceStatus" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="text-center text-gray-500 py-8 col-span-full">
+                        <i class="fas fa-network-wired text-4xl mb-4"></i>
+                        <p>正在加载设备状态...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 连接状态指示器 -->
+    <div class="fixed bottom-4 right-4">
+        <div id="connectionStatus" class="bg-gray-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center">
+            <div class="w-2 h-2 bg-gray-300 rounded-full mr-2"></div>
+            <span class="text-sm">连接中...</span>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        // WebSocket连接
+        const socket = io();
+        let messageCount = 0;
+        let startTime = Date.now();
+
+        // 连接状态管理
+        socket.on('connect', function() {
+            updateConnectionStatus('connected', '已连接');
+            console.log('WebSocket连接成功');
+        });
+
+        socket.on('disconnect', function() {
+            updateConnectionStatus('disconnected', '连接断开');
+            console.log('WebSocket连接断开');
+        });
+
+        // 更新连接状态
+        function updateConnectionStatus(status, text) {
+            const indicator = document.getElementById('connectionStatus');
+            const dot = indicator.querySelector('div');
+            const span = indicator.querySelector('span');
+
+            if (status === 'connected') {
+                indicator.className = 'bg-green-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center pulse';
+                dot.className = 'w-2 h-2 bg-green-300 rounded-full mr-2';
+            } else {
+                indicator.className = 'bg-red-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center';
+                dot.className = 'w-2 h-2 bg-red-300 rounded-full mr-2';
+            }
+            span.textContent = text;
+        }
+
+        // 处理实时传感器数据
+        socket.on('sensor_data', function(data) {
+            messageCount++;
+            addRealTimeData(data);
+            updateStatistics();
+        });
+
+        // 处理警报数据
+        socket.on('alert_data', function(data) {
+            addAlertData(data);
+            updateStatistics();
+        });
+
+        // 处理设备状态更新
+        socket.on('devices_update', function(devices) {
+            updateDeviceStatus(devices);
+            updateStatistics();
+        });
+
+        // 添加实时数据显示
+        function addRealTimeData(data) {
+            const container = document.getElementById('realTimeData');
+            const timestamp = new Date(data.timestamp * 1000).toLocaleString('zh-CN');
+
+            const dataCard = document.createElement('div');
+            dataCard.className = 'data-row bg-gray-50 rounded-lg p-4 border-l-4 border-blue-500';
+
+            // 分析传感器状态
+            const flameStatus = getFlameStatus(data.flame);
+            const smokeStatus = getSmokeStatus(data.smoke);
+            const tempStatus = getTemperatureStatus(data.temperature);
+            const lightStatus = getLightStatus(data.light);
+            const overallStatus = data.status || 'normal';
+
+            dataCard.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs text-gray-500">${timestamp}</span>
+                    <span class="px-2 py-1 text-xs rounded-full ${getStatusClass(overallStatus)}">
+                        ${getStatusText(overallStatus)}
+                    </span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="flex items-center">
+                        <i class="fas fa-fire mr-2 ${flameStatus.iconColor}"></i>
+                        <span>火焰: ${data.flame || 'N/A'} (${flameStatus.text})</span>
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-smog mr-2 ${smokeStatus.iconColor}"></i>
+                        <span>烟雾: ${data.smoke || 'N/A'} (${smokeStatus.text})</span>
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-thermometer-half mr-2 ${tempStatus.iconColor}"></i>
+                        <span>温度: ${data.temperature || 'N/A'}°C (${tempStatus.text})</span>
+                    </div>
+                    <div class="flex items-center">
+                        <i class="fas fa-lightbulb mr-2 ${lightStatus.iconColor}"></i>
+                        <span>光照: ${data.light || 'N/A'}lux (${lightStatus.text})</span>
+                    </div>
+                </div>
+                <div class="text-xs text-gray-600 mt-2">
+                    设备ID: ${data.device_id || 'unknown'}
+                </div>
+            `;
+
+            // 添加到顶部
+            container.insertBefore(dataCard, container.firstChild);
+
+            // 限制显示数量
+            while (container.children.length > 10) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        // 添加警报数据显示
+        function addAlertData(data) {
+            const container = document.getElementById('alertData');
+            const timestamp = new Date().toLocaleString('zh-CN');
+
+            // 清空"暂无警报信息"
+            if (container.children.length === 1 && container.children[0].textContent.includes('暂无警报信息')) {
+                container.innerHTML = '';
+            }
+
+            const alertCard = document.createElement('div');
+            alertCard.className = 'data-row bg-red-50 rounded-lg p-4 border-l-4 border-red-500';
+
+            alertCard.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs text-gray-500">${timestamp}</span>
+                    <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">
+                        ${data.level || 'high'} 级别
+                    </span>
+                </div>
+                <div class="text-sm font-medium text-red-800 mb-2">
+                    ${data.message || data.alert_type || '未知警报'}
+                </div>
+                ${data.data ? `
+                    <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                        <div>火焰: ${data.data.flame || 'N/A'}</div>
+                        <div>烟雾: ${data.data.smoke || 'N/A'}</div>
+                        <div>温度: ${data.data.temperature || 'N/A'}°C</div>
+                        <div>光照: ${data.data.light || 'N/A'}lux</div>
+                    </div>
+                ` : ''}
+            `;
+
+            // 添加到顶部
+            container.insertBefore(alertCard, container.firstChild);
+
+            // 限制显示数量
+            while (container.children.length > 10) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        // 更新设备状态
+        function updateDeviceStatus(devices) {
+            const container = document.getElementById('deviceStatus');
+            container.innerHTML = '';
+
+            devices.forEach(device => {
+                const deviceCard = document.createElement('div');
+                deviceCard.className = 'sensor-card bg-white border rounded-lg p-4';
+
+                const statusClass = device.status === '警报' ? 'status-alarm' :
+                                  device.status === '警告' ? 'status-warning' : 'status-normal';
+
+                deviceCard.innerHTML = `
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="font-medium text-gray-900">${device.location || device.device_id}</h4>
+                        <span class="px-2 py-1 text-xs text-white rounded-full ${statusClass}">
+                            ${device.status}
+                        </span>
+                    </div>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">温度:</span>
+                            <span class="font-medium">${device.temperature}°C</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">湿度:</span>
+                            <span class="font-medium">${device.humidity}%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">烟雾:</span>
+                            <span class="font-medium">${device.smoke_level}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">火焰:</span>
+                            <span class="font-medium">${device.flame}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">光照:</span>
+                            <span class="font-medium">${device.light_level}lux</span>
+                        </div>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-3">
+                        更新时间: ${new Date(device.last_update * 1000).toLocaleString('zh-CN')}
+                    </div>
+                `;
+
+                container.appendChild(deviceCard);
+            });
+
+            if (devices.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-gray-500 py-8 col-span-full">
+                        <i class="fas fa-server text-4xl mb-4"></i>
+                        <p>暂无设备数据</p>
+                    </div>
+                `;
+            }
+        }
+
+        // 更新统计信息
+        function updateStatistics() {
+            fetch('/api/devices')
+                .then(response => response.json())
+                .then(devices => {
+                    const normalCount = devices.filter(d => d.status === '正常').length;
+                    const warningCount = devices.filter(d => d.status === '警告').length;
+                    const alarmCount = devices.filter(d => d.status === '警报').length;
+
+                    document.getElementById('deviceCount').textContent = devices.length;
+                    document.getElementById('normalCount').textContent = normalCount;
+                    document.getElementById('warningCount').textContent = warningCount;
+                    document.getElementById('alarmCount').textContent = alarmCount;
+                })
+                .catch(error => {
+                    console.error('获取统计数据失败:', error);
+                });
+        }
+
+        // 传感器状态分析函数
+        function getFlameStatus(value) {
+            if (value < 500) return { text: '警报', iconColor: 'text-red-500' };
+            if (value < 1000) return { text: '警告', iconColor: 'text-yellow-500' };
+            return { text: '正常', iconColor: 'text-green-500' };
+        }
+
+        function getSmokeStatus(value) {
+            if (value < 1000) return { text: '警报', iconColor: 'text-red-500' };
+            if (value < 1500) return { text: '警告', iconColor: 'text-yellow-500' };
+            return { text: '正常', iconColor: 'text-green-500' };
+        }
+
+        function getTemperatureStatus(value) {
+            if (value > 40) return { text: '警报', iconColor: 'text-red-500' };
+            if (value > 35) return { text: '警告', iconColor: 'text-yellow-500' };
+            return { text: '正常', iconColor: 'text-green-500' };
+        }
+
+        function getLightStatus(value) {
+            if (value > 30) return { text: '警报', iconColor: 'text-red-500' };
+            if (value > 20) return { text: '警告', iconColor: 'text-yellow-500' };
+            return { text: '正常', iconColor: 'text-green-500' };
+        }
+
+        function getStatusClass(status) {
+            switch(status) {
+                case 'alarm': return 'bg-red-100 text-red-800';
+                case 'warning': return 'bg-yellow-100 text-yellow-800';
+                default: return 'bg-green-100 text-green-800';
+            }
+        }
+
+        function getStatusText(status) {
+            switch(status) {
+                case 'alarm': return '警报';
+                case 'warning': return '警告';
+                default: return '正常';
+            }
+        }
+
+        // 定期刷新统计数据
+        setInterval(updateStatistics, 5000);
+
+        // 初始化统计数据
+        updateStatistics();
+    </script>
+</body>
+</html>

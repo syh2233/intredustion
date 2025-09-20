@@ -117,6 +117,24 @@
         </section>
     </div>
 
+    <!-- 底部导航 -->
+    <nav class="bottom-nav">
+        <div class="nav-container">
+            <a href="/" class="nav-item">
+                <i class="fas fa-home"></i>
+                <span>首页</span>
+            </a>
+            <a href="/dashboard" class="nav-item active">
+                <i class="fas fa-chart-line"></i>
+                <span>仪表板</span>
+            </a>
+            <a href="/monitor" class="nav-item">
+                <i class="fas fa-satellite-dish"></i>
+                <span>实时监控</span>
+            </a>
+        </div>
+    </nav>
+
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>

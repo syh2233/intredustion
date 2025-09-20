@@ -24,7 +24,9 @@
       "Bash(pip install:*)",
       "Bash(pip3 install:*)",
       "Bash(source:*)",
-      "Bash(./.venv/Scripts/python.exe:*)"
+      "Bash(./.venv/Scripts/python.exe:*)",
+      "Bash(systemctl:*)",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": []

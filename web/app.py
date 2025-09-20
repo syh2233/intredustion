@@ -13,10 +13,10 @@ Main Functions:
 """
 
 from flask import Flask, render_template, request, jsonify, send_from_directory
-from flask_mqtt import Mqtt
 from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
+import paho.mqtt.client as mqtt
 import sqlite3
 import json
 import time
@@ -61,7 +61,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///fire_alarm.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # MQTT configuration
-app.config['MQTT_BROKER_URL'] = 'localhost'
+app.config['MQTT_BROKER_URL'] = '192.168.24.32'
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_USERNAME'] = ''
 app.config['MQTT_PASSWORD'] = ''
@@ -70,9 +70,77 @@ app.config['MQTT_TLS_ENABLED'] = False
 
 # Initialize extensions
 db = SQLAlchemy(app)
-mqtt = Mqtt(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 CORS(app)
+
+# MQTT client setup
+mqtt_client = mqtt.Client()
+
+def on_connect(client, userdata, flags, rc):
+    """MQTT连接回调"""
+    logger.info(f"MQTT连接成功，返回码: {rc}")
+    logger.info(f"Connected to broker: {app.config['MQTT_BROKER_URL']}:{app.config['MQTT_BROKER_PORT']}")
+    # 订阅主题
+    client.subscribe('esp32/+/data/json')
+    client.subscribe('esp32/+/alert/#')
+    client.subscribe('esp32/+/status/#')
+    logger.info("MQTT主题订阅: esp32/+/data/json, esp32/+/alert/#, esp32/+/status/#")
+
+def on_disconnect(client, userdata, rc):
+    """MQTT断开连接回调"""
+    if rc != 0:
+        logger.warning(f"MQTT意外断开连接，返回码: {rc}")
+    else:
+        logger.info("MQTT正常断开连接")
+
+def on_message(client, userdata, msg):
+    """MQTT消息接收回调"""
+    try:
+        # paho-mqtt新版本中topic和payload已经是字符串
+        topic = msg.topic
+        payload = msg.payload.decode('utf-8') if isinstance(msg.payload, bytes) else msg.payload
+
+        logger.info(f"收到MQTT消息 - 主题: {topic}, 内容: {payload}")
+        logger.info(f"消息详情 - 主题长度: {len(topic)}, 内容长度: {len(payload)}")
+
+        # 在Flask应用上下文中处理数据
+        with app.app_context():
+            if '/data/json' in topic:
+                logger.info("处理传感器数据消息...")
+                # 处理传感器数据
+                data = json.loads(payload)
+                logger.info(f"解析的传感器数据: {data}")
+                process_sensor_data(data)
+
+            elif '/alert/' in topic:
+                logger.info("处理警报数据消息...")
+                # 处理警报信息
+                alert_data = json.loads(payload)
+                logger.info(f"解析的警报数据: {alert_data}")
+                process_alert_data(alert_data)
+            else:
+                logger.info(f"收到未处理主题的消息: {topic}")
+
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON解析错误: {e}, 内容: {payload}")
+    except Exception as e:
+        logger.error(f"处理MQTT消息错误: {e}")
+        logger.error(f"错误详情: {str(e)}")
+        # 不再访问可能未定义的topic变量
+
+# 设置MQTT回调
+mqtt_client.on_connect = on_connect
+mqtt_client.on_disconnect = on_disconnect
+mqtt_client.on_message = on_message
+
+# 连接MQTT broker
+try:
+    logger.info("正在连接MQTT broker...")
+    mqtt_client.connect(app.config['MQTT_BROKER_URL'], app.config['MQTT_BROKER_PORT'], 60)
+    mqtt_client.loop_start()
+    logger.info("MQTT客户端启动")
+except Exception as e:
+    logger.error(f"MQTT连接失败: {e}")
 
 # Database models
 class SensorData(db.Model):
@@ -119,39 +187,7 @@ class DeviceInfo(db.Model):
 with app.app_context():
     db.create_all()
 
-# MQTT connection event
-@mqtt.on_connect()
-def handle_connect(client, userdata, flags, rc):
-    """Subscribe to topics after MQTT connection success"""
-    logger.info(f"MQTT connection successful, return code: {rc}")
-    # Subscribe to device data topics
-    mqtt.subscribe('esp32/+/data/json')
-    mqtt.subscribe('esp32/+/alert/#')
-    mqtt.subscribe('esp32/+/status/#')
-    logger.info("MQTT topics subscribed")
-
-# MQTT message processing
-@mqtt.on_message()
-def handle_mqtt_message(client, userdata, msg):
-    """Handle received MQTT messages"""
-    try:
-        topic = msg.topic.decode('utf-8')
-        payload = msg.payload.decode('utf-8')
-        
-        logger.info(f"MQTT message received - Topic: {topic}, Payload: {payload}")
-        
-        if '/data/json' in topic:
-            # Process sensor data
-            data = json.loads(payload)
-            process_sensor_data(data)
-            
-        elif '/alert/' in topic:
-            # Process alert information
-            alert_data = json.loads(payload)
-            process_alert_data(alert_data)
-            
-    except Exception as e:
-        logger.error(f"Error processing MQTT message: {e}")
+# MQTT连接已通过paho-mqtt直接处理
 
 def process_sensor_data(data):
     """Process sensor data"""
@@ -260,6 +296,11 @@ def index():
 def dashboard():
     """Dashboard page - detailed data visualization"""
     return render_template('dashboard.html')
+
+@app.route('/monitor')
+def monitor():
+    """MQTT real-time monitoring page"""
+    return render_template('monitor.html')
 
 @app.route('/api/data/recent')
 def get_recent_data():
@@ -370,6 +411,65 @@ def receive_data():
         return jsonify({'status': 'success', 'message': 'Data received'})
     except Exception as e:
         logger.error(f"Error receiving HTTP data: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/mqtt/status')
+def mqtt_status():
+    """Check MQTT connection status"""
+    try:
+        # 检查MQTT客户端连接状态
+        if mqtt_client.is_connected():
+            logger.info("MQTT client is connected")
+            return jsonify({
+                'status': 'connected',
+                'broker': app.config['MQTT_BROKER_URL'],
+                'port': app.config['MQTT_BROKER_PORT'],
+                'connected': True
+            })
+        else:
+            logger.warning("MQTT client is not connected")
+            # 尝试重新连接
+            try:
+                logger.info("Attempting to reconnect to MQTT broker...")
+                mqtt_client.reconnect()
+                logger.info("MQTT reconnection attempted")
+            except Exception as reconnect_error:
+                logger.error(f"MQTT reconnection failed: {reconnect_error}")
+
+            return jsonify({
+                'status': 'disconnected',
+                'broker': app.config['MQTT_BROKER_URL'],
+                'port': app.config['MQTT_BROKER_PORT'],
+                'connected': False
+            })
+    except Exception as e:
+        logger.error(f"Error checking MQTT status: {e}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'broker': app.config['MQTT_BROKER_URL'],
+            'port': app.config['MQTT_BROKER_PORT']
+        }), 500
+
+@app.route('/api/mqtt/test', methods=['POST'])
+def mqtt_publish_test():
+    """Test MQTT message publishing"""
+    try:
+        data = request.get_json()
+        topic = data.get('topic', 'test/topic')
+        message = data.get('message', 'Test message')
+
+        mqtt_client.publish(topic, message)
+        logger.info(f"Published test message to {topic}: {message}")
+
+        return jsonify({
+            'status': 'success',
+            'topic': topic,
+            'message': message,
+            'timestamp': datetime.utcnow().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Error publishing test message: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ESP32 Fire Alarm System API Routes
@@ -513,4 +613,8 @@ cleanup_thread.start()
 if __name__ == '__main__':
     logger.info("Starting ESP32 Dormitory Fire Alarm System Web Server...")
     logger.info("Access URL: http://localhost:5000")
+    logger.info(f"MQTT Broker: {app.config['MQTT_BROKER_URL']}:{app.config['MQTT_BROKER_PORT']}")
+    logger.info("Please check MQTT connection status in the logs...")
+
+    # 启动服务器，使用端口5001
     socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
