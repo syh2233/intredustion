@@ -300,21 +300,17 @@ def read_dht11():
         return 26, 50
 
 def check_fire_alarm(flame_value, mq2_analog, temperature):
-    """火灾检测算法 - 基于main_sim.py的逻辑"""
+    """火灾检测算法 - 使用实际传感器读数"""
     if flame_value is None and mq2_analog is None and temperature is None:
         return "normal"
 
-    # 转换火焰值（0表示检测到火焰，需要转换为低值）
-    flame_normalized = 500 if flame_value == 0 else 1500
-
-    # 转换MQ2值（值越低表示烟雾越浓）
-    smoke_normalized = 2000 - mq2_analog if mq2_analog is not None else 50
-
     # 警报条件（任一满足即触发）
-    if flame_normalized < 1000 or smoke_normalized > 100 or (temperature is not None and temperature > 40):
+    # 火焰传感器值为0表示检测到火焰
+    # MQ2烟雾传感器值低表示烟雾浓度高
+    if flame_value == 0 or (mq2_analog is not None and mq2_analog < 1000) or (temperature is not None and temperature > 40):
         return "alarm"
     # 警告条件（任一满足即触发）
-    elif flame_normalized < 1100 or smoke_normalized > 50 or (temperature is not None and temperature > 35):
+    elif flame_value < 5 or (mq2_analog is not None and mq2_analog < 1500) or (temperature is not None and temperature > 35):
         return "warning"
     else:
         return "normal"
@@ -512,17 +508,14 @@ def main():
         oled_status = f"{status}/{alarm_status}"[:10]  # 显示两种状态
         update_oled_display(flame_value, mq2_analog, mq2_digital, sound_analog, sound_digital, temperature, humidity, oled_status)
 
-        # 发送MQTT数据 - 使用与main_sim.py相同的格式
+        # 发送MQTT数据 - 发送实际传感器读数
         if mqtt_connected:
             try:
-                # 转换数据格式以匹配main_sim.py
-                flame_normalized = 500 if flame_value == 0 else 1500
-                smoke_normalized = 2000 - mq2_analog if mq2_analog is not None else 50
-
+                # 直接发送实际传感器读数，不做转换
                 payload = {
                     "device_id": DEVICE_ID,
-                    "flame": flame_normalized,
-                    "smoke": smoke_normalized,
+                    "flame": flame_value,
+                    "smoke": mq2_analog,
                     "temperature": temperature,
                     "humidity": humidity,
                     "status": alarm_status,  # 使用火灾检测结果
