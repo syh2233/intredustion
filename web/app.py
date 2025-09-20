@@ -60,9 +60,9 @@ app.config['SECRET_KEY'] = 'esp32_fire_alarm_system_2024'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///fire_alarm.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# MQTT configuration
-app.config['MQTT_BROKER_URL'] = '192.168.24.32'
-app.config['MQTT_BROKER_PORT'] = 1883
+# MQTT configuration - 使用公网端口映射
+app.config['MQTT_BROKER_URL'] = '22.tcp.cpolar.top'
+app.config['MQTT_BROKER_PORT'] = 14871
 app.config['MQTT_USERNAME'] = ''
 app.config['MQTT_PASSWORD'] = ''
 app.config['MQTT_KEEPALIVE'] = 60

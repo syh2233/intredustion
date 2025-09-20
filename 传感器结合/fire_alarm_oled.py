@@ -59,9 +59,9 @@ DEVICE_ID = "esp32_fire_alarm_01"
 WIFI_SSID = "syh2031"
 WIFI_PASSWORD = "12345678"
 
-# MQTT配置
-MQTT_SERVER = "192.168.24.32"
-MQTT_PORT = 1883
+# MQTT配置 - 使用公网端口映射
+MQTT_SERVER = "22.tcp.cpolar.top"
+MQTT_PORT = 14871
 
 # GPIO配置（用户指定接口）
 DHT11_PIN = 4
