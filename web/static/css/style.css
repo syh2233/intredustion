@@ -251,6 +251,195 @@ body {
     box-shadow: var(--shadow-md);
 }
 
+/* 从机区域 */
+.slaves-section {
+    background: var(--card-bg);
+    border-radius: 15px;
+    padding: 1.5rem;
+    box-shadow: var(--shadow-md);
+}
+
+.slaves-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.slave-card {
+    background: var(--card-bg);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.slave-card.normal {
+    border-color: var(--normal-color);
+    box-shadow: 0 0 10px rgba(76, 175, 80, 0.2);
+}
+
+.slave-card.warning {
+    border-color: var(--warning-color);
+    box-shadow: 0 0 10px rgba(255, 152, 0, 0.2);
+}
+
+.slave-card.alarm {
+    border-color: var(--alarm-color);
+    box-shadow: 0 0 15px rgba(244, 67, 54, 0.3);
+    animation: pulse 1s infinite;
+}
+
+.slave-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.slave-info h4 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.slave-location {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.slave-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.slave-sensors {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+    margin-bottom: 1rem;
+}
+
+.slave-sensors .sensor-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--bg-color);
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.slave-sensors .sensor-item i {
+    color: var(--primary-color);
+    width: 16px;
+}
+
+.slave-sensors .sensor-label {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.slave-sensors .sensor-value {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-left: auto;
+}
+
+.slave-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.detail-btn {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: background 0.3s ease;
+}
+
+.detail-btn:hover {
+    background: var(--secondary-color);
+}
+
+.no-slaves {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+
+.no-slaves i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.no-slaves p {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+/* 从机详情模态框 */
+.slave-detail-modal .modal-content {
+    max-width: 600px;
+    width: 90%;
+}
+
+.slave-detail-modal .detail-section {
+    margin-bottom: 1.5rem;
+}
+
+.slave-detail-modal .detail-section h4 {
+    color: var(--primary-color);
+    margin-bottom: 1rem;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 0.5rem;
+}
+
+.slave-detail-modal .sensor-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.slave-detail-modal .sensor-detail {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--bg-color);
+    border-radius: 8px;
+}
+
+.slave-detail-modal .sensor-detail i {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+}
+
+.slave-detail-modal .sensor-name {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.slave-detail-modal .sensor-value {
+    margin-left: auto;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+}
+
 .section-header {
     display: flex;
     justify-content: space-between;

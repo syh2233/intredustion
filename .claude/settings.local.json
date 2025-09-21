@@ -26,7 +26,8 @@
       "Bash(source:*)",
       "Bash(./.venv/Scripts/python.exe:*)",
       "Bash(systemctl:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(powershell -Command \"Invoke-RestMethod -Uri ''http://localhost:5000/api/slaves'' | ConvertTo-Json -Depth 10\")"
     ],
     "deny": [],
     "ask": []

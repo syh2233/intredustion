@@ -47,18 +47,18 @@ pip install flask flask-cors flask-mqtt flask-socketio paho-mqtt flask-sqlalchem
 
 ### Testing the System
 ```bash
-# 运行完整系统测试
-cd web
-python test_system.py
+# 运行ESP32主机-从机通信测试
+cd 传感器结合
+python test_master_slave.py
 
-# 运行快速场景测试
-python test_quick_scenarios.py
+# 运行ESP32 MQTT连接测试 (需要在ESP32设备上运行)
+python test_esp32_mqtt.py
 
-# 运行火灾报警场景测试
-python test_fire_alarm_scenarios.py
+# 运行系统模拟测试
+python fire_alarm_simulation_simple.py
 
-# 测试cpolar内网穿透
-python test_cpolar.py
+# 运行MQTT通用监控工具
+python mqtt_monitor_universal.py
 ```
 
 ### Setting up Mosquitto MQTT Broker (Windows)
@@ -223,33 +223,36 @@ python test_cpolar.py
 ## File Structure
 ```
 /
-├── 传感器结合/                   # ESP32 sensor integration code
-│   ├── main.py                 # Main ESP32 application with OLED display
-│   ├── esp32_slave.py          # ESP32 slave device for WiFi communication
-│   ├── host_udp_receiver.py   # Host UDP receiver for slave data
-│   ├── slave_config.py        # Slave configuration file
-│   ├── 从机部署指南.md          # Slave deployment guide
-│   ├── final_working_system.py # Alternative ESP32 implementation
-│   ├── flame_sensor_calibration.py # Flame sensor calibration
-│   ├── mqtt_monitor.py         # MQTT monitoring utility
-│   └── dht11_simple.py         # DHT11 sensor test
-├── web/                        # Flask web application
-│   ├── app.py                  # Main Flask application with MQTT, WebSocket, API
-│   ├── esp32_dht22_sensor.py   # ESP32 sensor simulation for testing
-│   ├── requirements.txt        # Python dependencies
-│   ├── templates/              # HTML templates
-│   │   ├── index.html         # 5-layer architecture main interface
-│   │   ├── dashboard.html     # Detailed monitoring dashboard
-│   │   └── index_old.html     # Legacy interface
-│   ├── static/                 # Static assets
-│   │   ├── css/style.css      # Main stylesheet
-│   │   └── js/                # JavaScript files
-│   │       ├── main.js        # Main interface JavaScript
-│   │       └── dashboard.js   # Dashboard JavaScript
-│   └── .venv/                 # Virtual environment
-├── 整体/                      # System architecture documents
-├── 项目计划进度表/             # Project planning documents
-└── .claude/                   # Claude Code configuration
+├── 传感器结合/                   # ESP32核心代码文件夹
+│   ├── main.py                 # ESP32主机主程序(1130行)
+│   ├── esp32_slave_simple.py   # ESP32从机简化版(683行)
+│   ├── esp32_slave.py          # ESP32从机完整版
+│   ├── master_slave_config.py  # 主从机统一配置文件
+│   ├── slave_config.py         # 从机独立配置文件
+│   ├── host_udp_receiver.py    # UDP接收器(独立运行)
+│   ├── test_master_slave.py    # 主从机通信测试
+│   ├── test_esp32_mqtt.py      # MQTT连接测试
+│   ├── flame_sensor_calibration.py # 火焰传感器校准
+│   ├── mqtt_monitor.py         # MQTT监控工具
+│   └── dht11_simple.py         # DHT11传感器测试
+├── web/                        # Flask Web应用
+│   ├── app.py                  # Flask主应用(618行)
+│   ├── esp32_dht22_sensor.py   # ESP32传感器模拟器
+│   ├── requirements.txt        # Python依赖
+│   ├── templates/              # HTML模板
+│   │   ├── index.html         # 5层架构主界面
+│   │   ├── dashboard.html     # 详细监控仪表板
+│   │   └── monitor.html       # 监控界面
+│   ├── static/                 # 静态资源
+│   │   ├── css/style.css      # 主样式表(17789行)
+│   │   └── js/                # JavaScript文件
+│   │       ├── main.js        # 主界面JS(39283行)
+│   │       └── dashboard.js   # 仪表板JS(21572行)
+│   └── .venv/                 # 虚拟环境
+├── 整体/                      # 系统架构文档
+├── 项目计划进度表/             # 项目管理文档
+├── 烧录/                      # ESP32烧录相关文件
+└── .claude/                   # Claude Code配置
 ```
 
 ## Key Implementation Details
@@ -308,3 +311,18 @@ python test_cpolar.py
 - Hardware and software are designed for dormitory safety scenarios
 - Emphasis on false alarm reduction and environmental adaptation
 - Supports both local and cloud deployment options
+
+## 代码开发规范
+- ESP32代码使用MicroPython，采用模块化设计
+- Web应用使用Flask框架，支持MQTT和WebSocket实时通信
+- 数据库使用SQLite，支持多设备数据存储
+- 配置文件统一管理，便于部署和维护
+- 测试文件覆盖主要功能模块，确保系统稳定性
+
+## 常见开发任务
+1. **添加新传感器**: 修改main.py和对应的配置文件
+2. **修改报警阈值**: 更新master_slave_config.py中的阈值设置
+3. **扩展从机数量**: 在配置文件中添加新的从机配置
+4. **自定义Web界面**: 修改web/templates/和web/static/中的文件
+5. **调试MQTT连接**: 使用test_esp32_mqtt.py和mqtt_monitor.py工具
+6. **测试主从机通信**: 使用test_master_slave.py进行通信测试

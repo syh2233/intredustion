@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>从机显示测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .slave-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            background: #f9f9f9;
+        }
+        .slave-card.normal {
+            border-left: 4px solid #28a745;
+        }
+        .slave-card.warning {
+            border-left: 4px solid #ffc107;
+        }
+        .slave-card.alarm {
+            border-left: 4px solid #dc3545;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .log {
+            background: #000;
+            color: #0f0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            max-height: 200px;
+            overflow-y: auto;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>从机显示测试页面</h1>
+
+    <div class="test-section">
+        <h2>1. API测试</h2>
+        <button class="btn" onclick="testSlavesAPI()">测试从机API</button>
+        <button class="btn" onclick="testDevicesAPI()">测试设备API</button>
+        <div id="api-result" class="log"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. 从机显示</h2>
+        <button class="btn" onclick="loadSlaves()">加载从机数据</button>
+        <button class="btn" onclick="clearSlaves()">清空显示</button>
+        <div id="slaves-container"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. WebSocket测试</h2>
+        <button class="btn" onclick="connectWebSocket()">连接WebSocket</button>
+        <button class="btn" onclick="disconnectWebSocket()">断开WebSocket</button>
+        <div id="ws-log" class="log"></div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        let socket = null;
+        const slaves = {};
+
+        function log(elementId, message) {
+            const logElement = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.innerHTML += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        async function testSlavesAPI() {
+            try {
+                log('api-result', '正在测试从机API...');
+                const response = await fetch('/api/slaves');
+                const data = await response.json();
+                log('api-result', `成功获取从机数据: ${JSON.stringify(data, null, 2)}`);
+            } catch (error) {
+                log('api-result', `API测试失败: ${error.message}`);
+            }
+        }
+
+        async function testDevicesAPI() {
+            try {
+                log('api-result', '正在测试设备API...');
+                const response = await fetch('/api/devices');
+                const data = await response.json();
+                log('api-result', `成功获取设备数据: ${JSON.stringify(data, null, 2)}`);
+            } catch (error) {
+                log('api-result', `API测试失败: ${error.message}`);
+            }
+        }
+
+        async function loadSlaves() {
+            try {
+                const container = document.getElementById('slaves-container');
+                container.innerHTML = '<p>正在加载...</p>';
+
+                const response = await fetch('/api/slaves');
+                const data = await response.json();
+
+                container.innerHTML = '';
+                if (data.length === 0) {
+                    container.innerHTML = '<p>暂无从机数据</p>';
+                    return;
+                }
+
+                data.forEach(slave => {
+                    const slaveCard = createSlaveCard(slave);
+                    container.appendChild(slaveCard);
+                });
+
+                log('api-result', `成功加载 ${data.length} 个从机`);
+            } catch (error) {
+                log('api-result', `加载从机失败: ${error.message}`);
+            }
+        }
+
+        function createSlaveCard(slave) {
+            const card = document.createElement('div');
+            card.className = `slave-card ${slave.overall_status || 'normal'}`;
+
+            const latestData = slave.latest_data || {};
+
+            card.innerHTML = `
+                <h4>${slave.name || slave.device_id}</h4>
+                <p><strong>位置:</strong> ${slave.location || '未知'}</p>
+                <p><strong>状态:</strong> ${slave.overall_status || 'normal'}</p>
+                <p><strong>火焰传感器:</strong> ${latestData.flame || 0}</p>
+                <p><strong>烟雾传感器:</strong> ${latestData.smoke || 0}</p>
+                <p><strong>最后更新:</strong> ${slave.last_seen || '未知'}</p>
+            `;
+
+            return card;
+        }
+
+        function clearSlaves() {
+            document.getElementById('slaves-container').innerHTML = '';
+            log('api-result', '已清空从机显示');
+        }
+
+        function connectWebSocket() {
+            if (socket) {
+                log('ws-log', 'WebSocket已经连接');
+                return;
+            }
+
+            socket = io();
+            log('ws-log', '正在连接WebSocket...');
+
+            socket.on('connect', () => {
+                log('ws-log', 'WebSocket连接成功');
+            });
+
+            socket.on('disconnect', () => {
+                log('ws-log', 'WebSocket连接断开');
+            });
+
+            socket.on('slave_data_update', (slaveData) => {
+                log('ws-log', `收到从机数据更新: ${JSON.stringify(slaveData)}`);
+                // 这里可以添加实时更新从机显示的逻辑
+            });
+
+            socket.on('connect_error', (error) => {
+                log('ws-log', `WebSocket连接错误: ${error.message}`);
+            });
+        }
+
+        function disconnectWebSocket() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                log('ws-log', 'WebSocket已断开');
+            }
+        }
+    </script>
+</body>
+</html>

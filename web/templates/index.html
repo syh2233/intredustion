@@ -118,6 +118,22 @@
                         <!-- 设备卡片将通过JavaScript动态生成 -->
                     </div>
                 </div>
+            </div>
+
+            <!-- 从机监控和报警历史并排布局 -->
+            <div class="monitoring-row">
+                <!-- 从机监控面板 -->
+                <div class="slaves-section">
+                    <div class="section-header">
+                        <h3><i class="fas fa-network-wired"></i> 从机监控</h3>
+                        <button class="refresh-btn" onclick="refreshSlaves()">
+                            <i class="fas fa-sync-alt"></i> 刷新
+                        </button>
+                    </div>
+                    <div class="slaves-container" id="slaves-container">
+                        <!-- 从机卡片将通过JavaScript动态生成 -->
+                    </div>
+                </div>
 
                 <!-- 报警历史 -->
                 <div class="alarm-section">

@@ -13,7 +13,6 @@ Main Functions:
 """
 
 from flask import Flask, render_template, request, jsonify, send_from_directory
-from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
@@ -24,6 +23,7 @@ import os
 from datetime import datetime, timedelta, timezone
 import threading
 import logging
+from threading import Lock
 
 # 时区转换函数
 def to_local_timestamp(utc_dt):
@@ -68,13 +68,14 @@ app.config['MQTT_PASSWORD'] = ''
 app.config['MQTT_KEEPALIVE'] = 60
 app.config['MQTT_TLS_ENABLED'] = False
 
-# Initialize extensions
+# Initialize extensions with simple configuration
 db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
 CORS(app)
 
 # MQTT client setup
 mqtt_client = mqtt.Client()
+
+# Eventlet handles concurrency automatically
 
 def on_connect(client, userdata, flags, rc):
     """MQTT连接回调"""
@@ -147,6 +148,7 @@ class SensorData(db.Model):
     """Sensor data model"""
     id = db.Column(db.Integer, primary_key=True)
     device_id = db.Column(db.String(50), nullable=False)
+    device_type = db.Column(db.String(20), default='master')  # 'master' or 'slave'
     flame_value = db.Column(db.Integer, nullable=False)
     smoke_value = db.Column(db.Integer, nullable=False)
     temperature = db.Column(db.Float)
@@ -178,6 +180,8 @@ class DeviceInfo(db.Model):
     name = db.Column(db.String(100), nullable=False)
     location = db.Column(db.String(200))
     ip_address = db.Column(db.String(15))
+    device_type = db.Column(db.String(20), default='master')  # 'master' or 'slave'
+    master_id = db.Column(db.String(50))  # 对于从机，记录其所属的主机ID
     last_seen = db.Column(db.DateTime)
     status = db.Column(db.String(20), default='online')
     config = db.Column(db.Text)
@@ -190,48 +194,128 @@ with app.app_context():
 # MQTT连接已通过paho-mqtt直接处理
 
 def process_sensor_data(data):
-    """Process sensor data"""
+    """Process sensor data with thread safety"""
     try:
+        device_id = data.get('device_id', 'unknown')
+
+        # Check if this is slave data (contains slave_id or sensors with slave structure)
+        is_slave_data = False
+        slave_id = None
+
+        # Initialize sensor values
+        flame_value = 0
+        smoke_value = 0
+        alert_status = False
+
+        if 'slave_id' in data:
+            # This is slave data sent directly from slave
+            is_slave_data = True
+            slave_id = data['slave_id']
+            device_id = slave_id  # Use slave_id as device_id
+            logger.info(f"Processing slave data from {slave_id}")
+
+            # Extract sensor values from slave structure
+            if 'sensors' in data and 'flame' in data['sensors']:
+                flame_sensor = data['sensors']['flame']
+                flame_value = flame_sensor.get('analog', 1200)
+
+            if 'sensors' in data and 'mq2_smoke' in data['sensors']:
+                mq2_sensor = data['sensors']['mq2_smoke']
+                smoke_value = mq2_sensor.get('analog', 1800)
+
+            alert_status = data.get('overall_status') in ['alarm', 'warning']
+
+        elif 'sensors' in data and 'flame' in data['sensors'] and 'mq2_smoke' in data['sensors']:
+            # This is slave data forwarded by master
+            is_slave_data = True
+            slave_id = data.get('slave_id', device_id)
+            device_id = slave_id
+
+            # Extract sensor values from slave structure
+            flame_sensor = data['sensors']['flame']
+            mq2_sensor = data['sensors']['mq2_smoke']
+
+            flame_value = flame_sensor.get('analog', 1200)
+            smoke_value = mq2_sensor.get('analog', 1800)
+            alert_status = data.get('overall_status') in ['alarm', 'warning']
+
+        else:
+            # This is master data
+            flame_value = data.get('flame', 0)
+            smoke_value = data.get('smoke', 0)
+            alert_status = data.get('alert', False)
+
         # Save to database
         sensor_data = SensorData(
-            device_id=data.get('device_id', 'unknown'),
-            flame_value=data.get('flame', 0),
-            smoke_value=data.get('smoke', 0),
+            device_id=device_id,
+            device_type='slave' if is_slave_data else 'master',
+            flame_value=flame_value,
+            smoke_value=smoke_value,
             temperature=data.get('temperature'),
             humidity=data.get('humidity'),
             light_level=data.get('light'),  # 光照传感器数据
-            alert_status=data.get('alert', False)
+            alert_status=alert_status
         )
         db.session.add(sensor_data)
-        db.session.commit()
-        
+
         # Update device status
-        device = DeviceInfo.query.filter_by(device_id=data.get('device_id')).first()
+        device = DeviceInfo.query.filter_by(device_id=device_id).first()
         if device:
             device.last_seen = datetime.utcnow()
             device.status = 'online'
+            device.device_type = 'slave' if is_slave_data else 'master'
         else:
             # Create new device record
+            device_name = data.get('name', f"ESP32-{device_id}")
+            device_location = data.get('location', 'Dormitory')
+            device_type = 'slave' if is_slave_data else 'master'
+
             device = DeviceInfo(
-                device_id=data.get('device_id'),
-                name=f"ESP32-{data.get('device_id', 'unknown')}",
-                location='Dormitory',
+                device_id=device_id,
+                name=device_name,
+                location=device_location,
+                device_type=device_type,
+                master_id=data.get('master_id') if is_slave_data else None,
                 last_seen=datetime.utcnow(),
                 status='online'
             )
             db.session.add(device)
+
         db.session.commit()
-        
+
+        # Prepare data for frontend
+        frontend_data = {
+            'device_id': device_id,
+            'device_type': 'slave' if is_slave_data else 'master',
+            'flame': flame_value,
+            'smoke': smoke_value,
+            'temperature': data.get('temperature'),
+            'humidity': data.get('humidity'),
+            'light': data.get('light'),
+            'alert': alert_status,
+            'timestamp': datetime.utcnow().isoformat(),
+            'slave_name': data.get('slave_name') if is_slave_data else None,
+            'slave_location': data.get('slave_location') if is_slave_data else None,
+            'overall_status': data.get('overall_status', 'normal' if not alert_status else 'alarm')
+        }
+
+        # Temporarily disable SocketIO to fix threading issues
         # Real-time push to frontend via WebSocket (for old UI)
-        socketio.emit('sensor_data', data)
-        
+        # socketio.emit('sensor_data', frontend_data)
+
         # Send device update to 5-layer architecture UI
-        send_device_update_to_ui(data.get('device_id'))
-        
-        logger.info(f"Sensor data saved and pushed: {data.get('device_id')}")
-        
+        # send_device_update_to_ui(device_id)
+
+        # Special handling for slave data
+        if is_slave_data:
+            # socketio.emit('slave_data_update', frontend_data)
+            logger.info(f"Slave data saved and pushed: {device_id}")
+        else:
+            logger.info(f"Master data saved and pushed: {device_id}")
+
     except Exception as e:
         logger.error(f"Error processing sensor data: {e}")
+        logger.error(f"Data content: {data}")
         db.session.rollback()
 
 def send_device_update_to_ui(device_id):
@@ -240,7 +324,7 @@ def send_device_update_to_ui(device_id):
         with app.app_context():
             devices_data = get_devices().get_json()
             socketio.emit('devices_update', devices_data)
-            
+
             # Check if this device has alarm condition
             for device_data in devices_data:
                 if device_data['device_id'] == device_id and device_data['status'] == '警报':
@@ -256,7 +340,7 @@ def send_device_update_to_ui(device_id):
                     }
                     socketio.emit('alarm', alarm_data)
                     break
-                    
+
     except Exception as e:
         logger.error(f"Error sending device update to UI: {e}")
 
@@ -279,7 +363,7 @@ def process_alert_data(alert_data):
         db.session.commit()
         
         # Push alert information to frontend
-        socketio.emit('alert_data', alert_data)
+        # socketio.emit('alert_data', alert_data)
         logger.warning(f"Alert record created: {alert_data.get('device_id')} - {alert_data.get('alert_type')}")
         
     except Exception as e:
@@ -287,6 +371,11 @@ def process_alert_data(alert_data):
         db.session.rollback()
 
 # Flask routes
+@app.route('/test_slaves')
+def test_slaves():
+    """Test page for slave display functionality"""
+    return render_template('test_slaves.html')
+
 @app.route('/')
 def index():
     """Homepage - ESP32 fire alarm system with 5-layer architecture"""
@@ -486,7 +575,11 @@ def get_devices():
         for device_id in device_ids:
             # Get device info
             device = DeviceInfo.query.filter_by(device_id=device_id).first()
-            
+
+            # Skip slave devices - they should only appear in /api/slaves
+            if device and device.device_type == 'slave':
+                continue
+
             # Get latest sensor data for this device
             latest_data = SensorData.query.filter_by(device_id=device_id)\
                                     .order_by(SensorData.timestamp.desc()).first()
@@ -539,12 +632,12 @@ def get_alarm_history():
         since_time = datetime.utcnow() - timedelta(hours=24)
         alerts = AlertHistory.query.filter(AlertHistory.timestamp >= since_time)\
                                  .order_by(AlertHistory.timestamp.desc()).limit(50).all()
-        
+
         result = []
         for alert in alerts:
             device = DeviceInfo.query.filter_by(device_id=alert.device_id).first()
             location = device.location if device else alert.device_id
-            
+
             result.append({
                 'timestamp': to_local_timestamp(alert.timestamp),
                 'device_id': alert.device_id,
@@ -556,40 +649,178 @@ def get_alarm_history():
                 'status': alert.severity,
                 'message': f"{location} 检测到{alert.alert_type}！"
             })
-        
+
         return jsonify(result)
     except Exception as e:
         logger.error(f"Error getting alarm history: {e}")
         return jsonify({'error': str(e)}), 500
 
-# WebSocket events
-@socketio.on('connect')
-def handle_connect():
-    """WebSocket connection event"""
-    logger.info('Client connected')
-    socketio.emit('connection_status', {'status': 'connected'})
-    # Send initial device data to connected client
+# Slave device API endpoints
+@app.route('/api/slaves')
+def get_slave_devices():
+    """Get all slave devices"""
     try:
-        with app.app_context():
-            devices_data = get_devices().get_json()
-            socketio.emit('devices_update', devices_data)
+        slaves = DeviceInfo.query.filter_by(device_type='slave').all()
+
+        result = []
+        for slave in slaves:
+            # Get latest sensor data for this slave
+            latest_data = SensorData.query.filter_by(device_id=slave.device_id)\
+                                    .order_by(SensorData.timestamp.desc()).first()
+
+            result.append({
+                'device_id': slave.device_id,
+                'name': slave.name,
+                'location': slave.location,
+                'master_id': slave.master_id,
+                'status': slave.status,
+                'last_seen': to_local_timestamp(slave.last_seen) if slave.last_seen else None,
+                'latest_data': {
+                    'flame': latest_data.flame_value if latest_data else 0,
+                    'smoke': latest_data.smoke_value if latest_data else 0,
+                    'temperature': latest_data.temperature if latest_data else 0,
+                    'humidity': latest_data.humidity if latest_data else 0,
+                    'light_level': latest_data.light_level if latest_data else 0,
+                    'alert_status': latest_data.alert_status if latest_data else False,
+                    'timestamp': to_local_timestamp(latest_data.timestamp) if latest_data else None
+                } if latest_data else None
+            })
+
+        return jsonify(result)
     except Exception as e:
-        logger.error(f"Error sending initial device data: {e}")
+        logger.error(f"Error getting slave devices: {e}")
+        return jsonify({'error': str(e)}), 500
 
-@socketio.on('disconnect')
-def handle_disconnect():
-    """WebSocket disconnection event"""
-    logger.info('Client disconnected')
-
-@socketio.on('request_device_update')
-def handle_device_update_request():
-    """Handle request for device status update"""
+@app.route('/api/slaves/<slave_id>/data')
+def get_slave_data(slave_id):
+    """Get recent data for specific slave"""
     try:
-        with app.app_context():
-            devices_data = get_devices().get_json()
-            socketio.emit('devices_update', devices_data)
+        limit = int(request.args.get('limit', 20))
+
+        data = SensorData.query.filter_by(device_id=slave_id)\
+                            .order_by(SensorData.timestamp.desc()).limit(limit).all()
+
+        result = []
+        for item in data:
+            result.append({
+                'id': item.id,
+                'device_id': item.device_id,
+                'device_type': item.device_type,
+                'flame': item.flame_value,
+                'smoke': item.smoke_value,
+                'temperature': item.temperature,
+                'humidity': item.humidity,
+                'light_level': item.light_level,
+                'alert_status': item.alert_status,
+                'timestamp': to_local_timestamp(item.timestamp)
+            })
+
+        return jsonify(result)
     except Exception as e:
-        logger.error(f"Error handling device update request: {e}")
+        logger.error(f"Error getting slave data: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/slaves/<slave_id>/status')
+def get_slave_status(slave_id):
+    """Get current status of specific slave"""
+    try:
+        device = DeviceInfo.query.filter_by(device_id=slave_id, device_type='slave').first()
+        if not device:
+            return jsonify({'error': 'Slave not found'}), 404
+
+        # Get latest sensor data
+        latest_data = SensorData.query.filter_by(device_id=slave_id)\
+                                .order_by(SensorData.timestamp.desc()).first()
+
+        # Calculate current status
+        status = 'offline'
+        flame_status = 'normal'
+        smoke_status = 'normal'
+        overall_status = 'normal'
+
+        if device.status == 'online' and latest_data:
+            status = 'online'
+
+            # Slave status logic based on flame and smoke sensors
+            flame_value = latest_data.flame_value or 1200
+            smoke_value = latest_data.smoke_value or 1800
+
+            if flame_value < 500 or smoke_value < 1000:
+                overall_status = 'alarm'
+                flame_status = 'alarm' if flame_value < 500 else 'normal'
+                smoke_status = 'alarm' if smoke_value < 1000 else 'normal'
+            elif flame_value < 1000 or smoke_value < 1500:
+                overall_status = 'warning'
+                flame_status = 'warning' if flame_value < 1000 else 'normal'
+                smoke_status = 'warning' if smoke_value < 1500 else 'normal'
+
+        return jsonify({
+            'device_id': slave_id,
+            'name': device.name,
+            'location': device.location,
+            'master_id': device.master_id,
+            'status': status,
+            'overall_status': overall_status,
+            'flame_status': flame_status,
+            'smoke_status': smoke_status,
+            'last_seen': to_local_timestamp(device.last_seen) if device.last_seen else None,
+            'latest_data': {
+                'flame': latest_data.flame_value if latest_data else 0,
+                'smoke': latest_data.smoke_value if latest_data else 0,
+                'timestamp': to_local_timestamp(latest_data.timestamp) if latest_data else None
+            } if latest_data else None
+        })
+    except Exception as e:
+        logger.error(f"Error getting slave status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# WebSocket events removed for stability - using HTTP polling instead
+
+# Test endpoint for generating test data
+@app.route('/test_data')
+def test_data():
+    """Generate test sensor data"""
+    try:
+        # Generate test master device data
+        test_master_data = {
+            'timestamp': int(time.time()),
+            'temperature': 26,
+            'smoke': 1500,
+            'light': 2.5,
+            'humidity': 50,
+            'status': 'normal',
+            'flame': 1500,
+            'device_id': 'esp32_fire_alarm_01'
+        }
+
+        # Generate test slave device data
+        test_slave_data = {
+            'slave_name': '测试从机-01',
+            'sensors': {
+                'flame': {'status': 'normal', 'digital': 1, 'analog': 1500},
+                'mq2_smoke': {'status': 'normal', 'digital': 1, 'analog': 4095}
+            },
+            'slave_id': 'esp32_slave_test_01',
+            'slave_location': '测试位置',
+            'timestamp': int(time.time()),
+            'type': 'sensor_data',
+            'overall_status': 'normal',
+            'sequence': 999
+        }
+
+        # Process test data
+        with app.app_context():
+            process_sensor_data(test_master_data)
+            process_sensor_data(test_slave_data)
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Test data generated and processed',
+            'master_data': test_master_data,
+            'slave_data': test_slave_data
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Scheduled cleanup of expired data
 def cleanup_old_data():
@@ -615,5 +846,5 @@ if __name__ == '__main__':
     logger.info(f"MQTT Broker: {app.config['MQTT_BROKER_URL']}:{app.config['MQTT_BROKER_PORT']}")
     logger.info("Please check MQTT connection status in the logs...")
 
-    # 启动服务器，使用端口5001
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
+    # 启动Flask服务器
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)

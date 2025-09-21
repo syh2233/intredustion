@@ -3,6 +3,7 @@
 // 全局变量
 let socket;
 let devices = {};
+let slaves = {};
 let alarmHistory = [];
 let realtimeChart;
 let sensorData = {
@@ -40,33 +41,10 @@ function initializeApp() {
     startTimers();
 }
 
-// 初始化Socket.IO连接
+// 初始化HTTP轮询 (替代WebSocket)
 function initializeSocket() {
-    socket = io();
-    
-    // 连接成功
-    socket.on('connected', function(data) {
-        console.log('Socket.IO连接成功:', data);
-        showNotification('连接成功', '已连接到火灾报警系统', 'success');
-    });
-    
-    // 接收设备状态更新
-    socket.on('devices_update', function(deviceData) {
-        updateDevices(deviceData);
-        updateStatusOverview(deviceData);
-        updateChartWithNewData(deviceData);
-    });
-    
-    // 接收报警信息
-    socket.on('alarm', function(alarmData) {
-        handleAlarm(alarmData);
-    });
-    
-    // 连接错误
-    socket.on('connect_error', function(error) {
-        console.error('Socket.IO连接错误:', error);
-        showNotification('连接错误', '无法连接到服务器', 'error');
-    });
+    console.log('使用HTTP轮询替代WebSocket...');
+    showNotification('连接成功', '已连接到火灾报警系统', 'success');
 }
 
 // 加载初始数据
@@ -82,7 +60,10 @@ function loadInitialData() {
             console.error('加载设备数据失败:', error);
             showNotification('加载失败', '无法加载设备数据', 'error');
         });
-    
+
+    // 加载从机数据
+    refreshSlaves();
+
     // 加载报警历史
     fetch('/api/history')
         .then(response => response.json())
@@ -129,12 +110,31 @@ function setupEventListeners() {
 function startTimers() {
     // 每30秒检查一次连接状态
     setInterval(checkConnection, 30000);
-    
+
     // 每秒更新时间显示
     setInterval(updateCurrentTime, 1000);
-    
+
     // 每5秒获取一次传感器数据用于图表
     setInterval(fetchSensorDataForChart, 5000);
+
+    // 每3秒刷新一次从机数据
+    setInterval(refreshSlaves, 3000);
+
+    // 每10秒刷新一次设备数据
+    setInterval(refreshDevices, 10000);
+}
+
+// 刷新设备数据
+function refreshDevices() {
+    fetch('/api/devices')
+        .then(response => response.json())
+        .then(data => {
+            updateDevices(data);
+            updateStatusOverview(data);
+        })
+        .catch(error => {
+            console.error('刷新设备数据失败:', error);
+        });
 }
 
 // 更新设备显示
@@ -829,10 +829,18 @@ function updateCurrentTime() {
 
 // 检查连接状态
 function checkConnection() {
-    if (socket && !socket.connected) {
-        showNotification('连接断开', '正在尝试重新连接...', 'warning');
-        // Socket.IO会自动重连
-    }
+    // 使用HTTP检查服务器连接状态
+    fetch('/api/devices')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('服务器连接异常');
+            }
+            console.log('服务器连接正常');
+        })
+        .catch(error => {
+            console.warn('连接检查失败:', error);
+            showNotification('连接断开', '正在尝试重新连接...', 'warning');
+        });
 }
 
 // 更新时间显示
@@ -1223,3 +1231,256 @@ window.stopAlarmSound = stopAlarmSound;
 window.refreshDevices = refreshDevices;
 window.showStatusDevices = showStatusDevices;
 window.closeStatusDevicesModal = closeStatusDevicesModal;
+window.refreshSlaves = refreshSlaves;
+window.testSlaveAPI = testSlaveAPI;
+
+// 从机相关函数
+function updateSlaveData(slaveData) {
+    console.log('更新从机数据:', slaveData);
+
+    // 确保从机数据格式与refreshSlaves一致
+    const existingSlave = slaves[slaveData.device_id] || {};
+
+    // 合并数据，保持格式一致
+    slaves[slaveData.device_id] = {
+        device_id: slaveData.device_id,
+        device_type: 'slave',
+        slave_name: slaveData.slave_name || existingSlave.slave_name || slaveData.device_id,
+        slave_location: slaveData.slave_location || existingSlave.slave_location || '未知位置',
+        overall_status: slaveData.overall_status || existingSlave.overall_status || 'normal',
+        flame: slaveData.flame || existingSlave.flame || 0,
+        smoke: slaveData.smoke || existingSlave.smoke || 0,
+        temperature: slaveData.temperature || existingSlave.temperature || 0,
+        humidity: slaveData.humidity || existingSlave.humidity || 0,
+        light_level: slaveData.light || slaveData.light_level || existingSlave.light_level || 0,
+        timestamp: slaveData.timestamp || existingSlave.timestamp || new Date().toISOString()
+    };
+
+    // 更新从机显示
+    updateSlavesDisplay();
+
+    // 如果从机处于警报状态，触发相应处理
+    if (slaveData.overall_status === 'alarm') {
+        handleSlaveAlarm(slaveData);
+    }
+}
+
+function updateSlavesDisplay() {
+    const container = document.getElementById('slaves-container');
+    if (!container) {
+        console.warn('从机容器元素不存在');
+        return;
+    }
+
+    container.innerHTML = '';
+
+    const slaveIds = Object.keys(slaves);
+    console.log(`更新从机显示，从机数量: ${slaveIds.length}`, slaves);
+
+    if (slaveIds.length === 0) {
+        container.innerHTML = `
+            <div class="no-slaves">
+                <i class="fas fa-network-wired"></i>
+                <p>暂无从机设备</p>
+            </div>
+        `;
+        return;
+    }
+
+    slaveIds.forEach(slaveId => {
+        const slave = slaves[slaveId];
+        console.log(`创建从机卡片: ${slaveId}`, slave);
+        const slaveCard = createSlaveCard(slave);
+        container.appendChild(slaveCard);
+    });
+}
+
+function createSlaveCard(slave) {
+    const card = document.createElement('div');
+    card.className = `slave-card ${slave.overall_status || 'normal'}`;
+    card.dataset.deviceId = slave.device_id;
+
+    const statusIcon = getStatusIcon(slave.overall_status || 'normal');
+    const statusText = getStatusName(slave.overall_status || 'normal');
+    const lastSeen = slave.timestamp ? new Date(slave.timestamp).toLocaleString() : '未知';
+
+    card.innerHTML = `
+        <div class="slave-header">
+            <div class="slave-info">
+                <h4>${slave.slave_name || slave.device_id}</h4>
+                <p class="slave-location">${slave.slave_location || '未知位置'}</p>
+            </div>
+            <div class="slave-status">
+                <span class="status-icon ${slave.overall_status || 'normal'}">${statusIcon}</span>
+                <span class="status-text">${statusText}</span>
+            </div>
+        </div>
+        <div class="slave-sensors">
+            <div class="sensor-item">
+                <i class="fas fa-fire"></i>
+                <span class="sensor-label">火焰:</span>
+                <span class="sensor-value">${slave.flame || 0}</span>
+            </div>
+            <div class="sensor-item">
+                <i class="fas fa-smog"></i>
+                <span class="sensor-label">烟雾:</span>
+                <span class="sensor-value">${slave.smoke || 0}</span>
+            </div>
+        </div>
+        <div class="slave-footer">
+            <span class="last-seen">更新时间: ${lastSeen}</span>
+            <button class="detail-btn" onclick="showSlaveDetail('${slave.device_id}')">
+                <i class="fas fa-info-circle"></i>
+            </button>
+        </div>
+    `;
+
+    return card;
+}
+
+// 测试从机API连接
+function testSlaveAPI() {
+    console.log('测试从机API连接...');
+
+    fetch('/api/slaves')
+        .then(response => {
+            console.log('API响应状态:', response.status, response.statusText);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('API连接测试成功，数据:', data);
+            return data;
+        })
+        .catch(error => {
+            console.error('API连接测试失败:', error);
+            throw error;
+        });
+}
+
+function refreshSlaves() {
+    console.log('刷新从机数据...');
+
+    fetch('/api/slaves')
+        .then(response => {
+            console.log('API响应状态:', response.status, response.statusText);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('获取到从机数据:', data);
+
+            // 更新从机数据存储
+            data.forEach(slave => {
+                console.log(`处理从机: ${slave.device_id}`, slave);
+                slaves[slave.device_id] = {
+                    device_id: slave.device_id,
+                    device_type: 'slave',
+                    slave_name: slave.name,
+                    slave_location: slave.location,
+                    overall_status: slave.status || 'normal',
+                    flame: slave.latest_data?.flame || 0,
+                    smoke: slave.latest_data?.smoke || 0,
+                    temperature: slave.latest_data?.temperature || 0,
+                    humidity: slave.latest_data?.humidity || 0,
+                    light_level: slave.latest_data?.light_level || 0,
+                    timestamp: slave.latest_data?.timestamp ? new Date(slave.latest_data.timestamp * 1000).toISOString() : null
+                };
+                console.log(`从机 ${slave.device_id} 数据已更新:`, slaves[slave.device_id]);
+            });
+
+            // 更新显示
+            updateSlavesDisplay();
+
+            // showNotification('刷新成功', `已加载 ${data.length} 个从机设备`, 'success');
+        })
+        .catch(error => {
+            console.error('刷新从机数据失败:', error);
+            console.error('错误详情:', {
+                message: error.message,
+                stack: error.stack,
+                response: error.response
+            });
+            // showNotification('刷新失败', `无法加载从机数据: ${error.message}`, 'error');
+        });
+}
+
+function showSlaveDetail(slaveId) {
+    const slave = slaves[slaveId];
+    if (!slave) {
+        // showNotification('错误', '从机数据不存在', 'error');
+        return;
+    }
+
+    // 创建从机详情模态框
+    const modal = document.createElement('div');
+    modal.className = 'modal slave-detail-modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>从机详情 - ${slave.slave_name || slave.device_id}</h3>
+                <span class="close-btn" onclick="this.closest('.modal').remove()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="detail-section">
+                    <h4>基本信息</h4>
+                    <p><strong>设备ID:</strong> ${slave.device_id}</p>
+                    <p><strong>设备名称:</strong> ${slave.slave_name || '未设置'}</p>
+                    <p><strong>安装位置:</strong> ${slave.slave_location || '未知'}</p>
+                    <p><strong>设备类型:</strong> 从机</p>
+                </div>
+                <div class="detail-section">
+                    <h4>传感器数据</h4>
+                    <div class="sensor-grid">
+                        <div class="sensor-detail">
+                            <i class="fas fa-fire"></i>
+                            <span class="sensor-name">火焰传感器</span>
+                            <span class="sensor-value">${slave.flame || 0}</span>
+                        </div>
+                        <div class="sensor-detail">
+                            <i class="fas fa-smog"></i>
+                            <span class="sensor-name">烟雾传感器</span>
+                            <span class="sensor-value">${slave.smoke || 0}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="detail-section">
+                    <h4>状态信息</h4>
+                    <p><strong>当前状态:</strong> ${getStatusName(slave.overall_status || 'normal')}</p>
+                    <p><strong>最后更新:</strong> ${slave.timestamp ? new Date(slave.timestamp).toLocaleString() : '未知'}</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="this.closest('.modal').remove()">关闭</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // 点击模态框外部关闭
+    modal.onclick = function(event) {
+        if (event.target === modal) {
+            modal.remove();
+        }
+    };
+}
+
+function handleSlaveAlarm(slaveData) {
+    console.log('从机报警:', slaveData);
+
+    // 播放报警声音
+    playAlarmSound();
+
+    // 显示报警通知
+    showNotification(
+        '从机火灾警报！',
+        `${slaveData.slave_location || slaveData.device_id} 检测到火灾风险！`,
+        'alarm'
+    );
+}
+

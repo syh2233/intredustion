@@ -54,6 +54,7 @@ def test_network_routing(gateway, target_ip):
 
 # ==================== 常量配置 ====================
 DEVICE_ID = "esp32_fire_alarm_01"
+pending_slave_mqtt_data = None  # 待发送的从机MQTT数据
 
 # WiFi配置
 WIFI_SSID = "syh2031"
@@ -345,6 +346,33 @@ class SlaveDataManager:
             # 打印接收到的数据
             print(f"📨 从机数据 - {slave_id} 序列:{sequence}")
             print(f"   火焰:{flame_analog}({flame_status}) | 烟雾:{mq2_analog}({mq2_status}) | 整体:{overall_status}")
+
+            # 准备从机数据用于MQTT发送
+            slave_mqtt_data = {
+                "type": "sensor_data",
+                "slave_id": slave_id,
+                "slave_name": self.slave_devices[slave_id].get('slave_name', slave_id),
+                "slave_location": self.slave_devices[slave_id].get('slave_location', '未知位置'),
+                "timestamp": time.time(),
+                "sensors": {
+                    "flame": {
+                        "analog": flame_analog,
+                        "digital": 1 if flame_status == 'normal' else 0,
+                        "status": flame_status
+                    },
+                    "mq2_smoke": {
+                        "analog": mq2_analog,
+                        "digital": 1 if mq2_status == 'normal' else 0,
+                        "status": mq2_status
+                    }
+                },
+                "overall_status": overall_status,
+                "sequence": sequence
+            }
+
+            # 通过全局变量发送到MQTT (需要在主循环中处理)
+            global pending_slave_mqtt_data
+            pending_slave_mqtt_data = slave_mqtt_data
 
             # 检查是否需要触发警报
             if overall_status == 'alarm':
@@ -1104,6 +1132,21 @@ def main():
                         "message": "环境异常警告"
                     }
                     mqtt_client.publish(f"esp32/{DEVICE_ID}/alert/warning", json.dumps(alert_msg))
+
+                # 发送从机数据（如果有）
+                global pending_slave_mqtt_data
+                if pending_slave_mqtt_data:
+                    try:
+                        slave_topic = f"esp32/{pending_slave_mqtt_data['slave_id']}/data/json"
+                        if mqtt_client.publish(slave_topic, json.dumps(pending_slave_mqtt_data)):
+                            print(f"📤 从机MQTT数据已发送: {pending_slave_mqtt_data['slave_id']}")
+                        else:
+                            print(f"❌ 从机MQTT发送失败: {pending_slave_mqtt_data['slave_id']}")
+
+                        # 清空待发送数据
+                        pending_slave_mqtt_data = None
+                    except Exception as e:
+                        print(f"❌ 从机MQTT发送异常: {e}")
 
             except Exception as e:
                 print(f"❌ MQTT发送异常: {e}")
