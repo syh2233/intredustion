@@ -4,19 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an ESP32-based dormitory fire alarm system project that implements real-time fire detection using multiple sensors (flame, smoke, temperature, humidity) with a web monitoring interface.
+This is an ESP32-based dormitory fire alarm system project that implements real-time fire detection using multiple sensors (flame, smoke, temperature, humidity, light, sound) with a web monitoring interface. The system features a 5-layer architecture with MQTT communication, real-time monitoring, and both local and cloud deployment capabilities.
 
 ## Development Environment
 
 ### ESP32 Development
 - **IDE**: Thonny IDE
 - **Firmware**: MicroPython 1.19+
-- **Core Libraries**: umqtt.simple/robust, ssd1306, urequests, network, machine
-- **Sensor Interfaces**: 
-  - Flame sensor (GPIO34, ADC input)
-  - MQ-2 smoke sensor (GPIO35, ADC input) 
-  - DHT22 temperature/humidity sensor (GPIO32, digital)
-  - OLED display (GPIO21/22, I2C)
+- **Core Libraries**: umqtt.simple/robust, ssd1306, dht, network, machine, socket
+- **Sensor Interfaces**:
+  - Flame sensor (GPIO14, ADC input) - 主要传感器
+  - MQ-2 smoke sensor (GPIO34 ADC, GPIO2 digital)
+  - DHT11 temperature/humidity sensor (GPIO4, digital)
+  - BH1750 light sensor (GPIO21/22, I2C)
+  - Sound sensor (GPIO13 ADC, GPIO35 digital)
+  - OLED display (GPIO25/26, I2C)
+  - Servo motor (GPIO15, PWM)
 
 ### Server Development
 - **Backend**: Flask 3.0+
@@ -84,22 +87,25 @@ mosquitto_sub -t "test" -v
 - **Multi-sensor Fusion**: Combines flame, smoke, temperature, and humidity data for accurate fire detection
 - **False Alarm Prevention**: Uses consecutive detection and trend analysis to reduce false positives
 
-### 火灾报警判断逻辑 (app.py:368-380)
+### 火灾报警判断逻辑 (main.py:416-463)
 系统基于多传感器数据进行智能火灾报警判断：
 
 ```python
 # 警报条件 (任一满足即触发)
-flame_value < 1000    # 火焰传感器值低表示检测到火焰
-smoke_level > 100    # 烟雾浓度过高
-temperature > 40      # 温度过高
+flame_analog < 500     # 火焰传感器值低表示检测到火焰
+mq2_analog < 1000     # MQ2烟雾传感器值低表示烟雾浓度高
+temperature > 40       # 温度过高
+light_level > 30       # 光照强度过高
 
 # 警告条件 (任一满足即触发)
-flame_value < 1100    # 火焰传感器值偏低
-smoke_level > 50     # 烟雾浓度中等
-temperature > 35      # 温度偏高
+flame_analog < 1000    # 火焰传感器值偏低
+mq2_analog < 1500      # 烟雾浓度中等
+temperature > 35       # 温度偏高
+light_level > 20       # 光照强度偏高
 ```
 
 **状态分类**: 正常 → 警告 → 警报 (三级状态机制)
+**舵机控制**: 连续3次警报才启动舵机，防止误报
 
 ### Communication Protocols
 - **MQTT**: Real-time data transmission and alert notifications
@@ -108,12 +114,16 @@ temperature > 35      # 温度偏高
 
 ## Hardware Configuration
 
-### Pin Mapping
-- GPIO34: Flame sensor (ADC input)
-- GPIO35: MQ-2 smoke sensor (ADC input) 
-- GPIO32: DHT22 temperature/humidity sensor (digital)
-- GPIO21/22: OLED display (I2C SDA/SCL)
-- GPIO23: Fan control (PWM output)
+### Pin Mapping (main.py:66-84)
+- GPIO14: Flame sensor (ADC input) - 主要传感器
+- GPIO34: MQ-2 smoke sensor (ADC input)
+- GPIO2: MQ-2 smoke sensor (digital input)
+- GPIO4: DHT11 temperature/humidity sensor (digital)
+- GPIO13: Sound sensor (ADC input)
+- GPIO35: Sound sensor (digital input)
+- GPIO15: Servo motor (PWM output)
+- GPIO21/22: BH1750 light sensor (I2C SDA/SCL)
+- GPIO25/26: OLED display (I2C SDA/SCL)
 
 ### Safety Notes
 - MQ-2 sensor requires 24-48 hour warm-up period for stability
@@ -122,24 +132,23 @@ temperature > 35      # 温度偏高
 
 ## Database Schema
 
-The system uses SQLite with these main tables:
-- `sensor_data`: Stores real-time sensor readings
-- `alert_history`: Records fire alarm events
-- `environment_alerts`: Environmental risk warnings
-- `devices`: Device information and status
-- `environment_thresholds`: Configurable thresholds
+The system uses SQLite with these main tables (app.py:146-184):
+- `sensor_data`: Stores real-time sensor readings including flame, smoke, temperature, humidity, light_level
+- `alert_history`: Records fire alarm events with severity and resolution status
+- `device_info`: Device information and status tracking
+- All tables include device_id for multi-device support
 
 ## MQTT Topics
 
-### Device Data Publishing
-- `esp32/{device_id}/data/json` - Sensor data
-- `esp32/{device_id}/status/online` - Device online status
+### Device Data Publishing (main.py:690-715)
+- `esp32/{device_id}/data/json` - Sensor data with all readings
 - `esp32/{device_id}/alert/fire` - Fire alarm notifications
+- `esp32/{device_id}/alert/warning` - Warning notifications
 
-### Server Commands
-- `server/{device_id}/cmd/config` - Configuration updates
-- `server/{device_id}/cmd/reboot` - Device restart
-- `server/{device_id}/cmd/threshold` - Threshold adjustments
+### Server Subscriptions (app.py:84-86)
+- `esp32/+/data/json` - Subscribe to all device sensor data
+- `esp32/+/alert/#` - Subscribe to all alert types
+- `esp32/+/status/#` - Subscribe to device status updates
 
 ## API Endpoints
 
@@ -156,15 +165,11 @@ The system uses SQLite with these main tables:
 - `GET /api/alerts` - 获取报警历史记录
 - Note: 实际报警处理通过MQTT主题 `esp32/{device_id}/alert/fire` 实现
 
-### WebSocket Events
-- `connect` - 客户端连接事件，发送初始设备数据
-- `disconnect` - 客户端断开连接事件
-- `request_device_update` - 请求设备状态更新
-- `devices_update` - 服务器推送设备状态更新
-- `alarm` - 火灾报警通知推送
-- `sensor_data` - 传感器实时数据推送 (旧接口)
-- `alert_data` - 报警数据推送
-- `connection_status` - 连接状态确认
+### WebSocket Events (app.py:226-258)
+- `sensor_data` - Real-time sensor data push (legacy interface)
+- `devices_update` - Device status updates for 5-layer UI
+- `alarm` - Fire alarm notifications with location and sensor data
+- `alert_data` - Alert data push for real-time updates
 
 ## Testing and Validation
 
@@ -218,23 +223,27 @@ python test_cpolar.py
 ## File Structure
 ```
 /
-├── web/                          # Flask web application
-│   ├── app.py                   # Main Flask application with MQTT, WebSocket, API routes
-│   ├── requirements.txt         # Python dependencies
-│   ├── test_system.py          # Complete system integration tests
-│   ├── test_quick_scenarios.py # Quick test scenarios
-│   ├── test_fire_alarm_scenarios.py # Fire alarm specific tests
-│   ├── test_cpolar.py          # Cpolar tunnel testing
-│   ├── cpolar配置指南.md        # Cpolar configuration guide
-│   ├── 端口映射配置指南.md      # Port mapping guide
+├── 传感器结合/                   # ESP32 sensor integration code
+│   ├── main.py                 # Main ESP32 application with OLED display
+│   ├── esp32_slave.py          # ESP32 slave device for WiFi communication
+│   ├── host_udp_receiver.py   # Host UDP receiver for slave data
+│   ├── slave_config.py        # Slave configuration file
+│   ├── 从机部署指南.md          # Slave deployment guide
+│   ├── final_working_system.py # Alternative ESP32 implementation
+│   ├── flame_sensor_calibration.py # Flame sensor calibration
+│   ├── mqtt_monitor.py         # MQTT monitoring utility
+│   └── dht11_simple.py         # DHT11 sensor test
+├── web/                        # Flask web application
+│   ├── app.py                  # Main Flask application with MQTT, WebSocket, API
+│   ├── esp32_dht22_sensor.py   # ESP32 sensor simulation for testing
+│   ├── requirements.txt        # Python dependencies
 │   ├── templates/              # HTML templates
 │   │   ├── index.html         # 5-layer architecture main interface
 │   │   ├── dashboard.html     # Detailed monitoring dashboard
 │   │   └── index_old.html     # Legacy interface
-│   ├── static/                # Static assets
-│   │   ├── css/
-│   │   │   └── style.css      # Main stylesheet
-│   │   └── js/
+│   ├── static/                 # Static assets
+│   │   ├── css/style.css      # Main stylesheet
+│   │   └── js/                # JavaScript files
 │   │       ├── main.js        # Main interface JavaScript
 │   │       └── dashboard.js   # Dashboard JavaScript
 │   └── .venv/                 # Virtual environment
@@ -242,6 +251,56 @@ python test_cpolar.py
 ├── 项目计划进度表/             # Project planning documents
 └── .claude/                   # Claude Code configuration
 ```
+
+## Key Implementation Details
+
+### ESP32 Main Application (传感器结合/main.py)
+- Uses custom MQTT client implementation for reliability
+- Implements network connectivity testing and diagnostics
+- Features OLED real-time display of sensor data
+- Servo motor control for physical alarm activation
+- Multi-sensor fusion with environmental adaptation
+
+### Flask Web Server (web/app.py)
+- Dual interface support: 5-layer architecture and detailed dashboard
+- Real-time data processing via MQTT and WebSocket
+- Automatic device registration and status tracking
+- Timezone handling for Beijing time (UTC+8)
+- Comprehensive error logging and diagnostics
+
+### System Integration
+- Supports both local deployment and cloud access via cpolar
+- MQTT communication with public tunneling for remote access
+- Database auto-creation and schema management
+- Real-time alerts with multiple notification channels
+
+### ESP32主机-从机系统架构 (Master-Slave System)
+- **主从机通信**: ESP32主机通过UDP协议接收多个从机数据
+- **主机功能**: 完整的传感器监测 + UDP服务器 + MQTT通信 + OLED显示
+- **从机功能**: 简化的火焰和烟雾监测 + UDP数据发送 + LED状态指示
+- **数据整合**: 主机整合自身传感器数据和所有从机数据，统一通过MQTT上传
+- **多从机支持**: 支持同时连接多个从机ESP32设备
+- **状态监控**: 主机实时监控所有从机的在线状态和数据
+
+### 主机增强功能 (main.py更新)
+- **UDP服务器**: 内置UDP服务器监听8888端口
+- **从机管理**: 自动发现、注册和管理从机设备
+- **数据处理**: 实时处理从机传感器数据并触发相应警报
+- **状态监控**: 每30个循环检查从机在线状态，自动标记离线从机
+- **数据整合**: 将从机数据与主机数据统一处理和显示
+
+### 从机设计要点 (esp32_slave_simple.py)
+- **硬件简化**: 只需火焰传感器(GPIO14)和MQ2烟雾传感器(GPIO34/2) + LED(GPIO5)
+- **WiFi通信**: 与主机ESP32同一WiFi网络，自动连接到主机UDP服务器
+- **状态指示**: LED指示灯显示系统状态(正常/警告/警报)
+- **容错机制**: WiFi断开自动重连，数据发送失败自动重试
+- **配置灵活**: 通过配置文件轻松修改主机IP和传感器阈值
+
+### 部署配置
+- **配置文件**: `master_slave_config.py` 统一管理主机和从机配置
+- **主机IP**: 从机需要配置主机的实际IP地址
+- **网络要求**: 主机和所有从机必须在同一WiFi网络下
+- **端口配置**: UDP通信使用8888端口，确保网络允许UDP通信
 
 ## Development Notes
 - 每次回答都使用中文回答我

@@ -504,12 +504,12 @@ def get_devices():
                 if (flame_value < 500 or       # 火焰传感器值低表示检测到火焰
                     smoke_level < 1000 or      # MQ2烟雾传感器值低表示烟雾浓度高
                     temperature > 40 or        # 温度过高
-                    light_level > 30):         # 光照过强
+                    light_level > 130):         # 光照过强
                     status = "警报"
                 elif (flame_value < 1000 or     # 火焰传感器值偏低
                       smoke_level < 1500 or    # 烟雾浓度中等
                       temperature > 35 or      # 温度偏高
-                      light_level > 20):       # 光照偏强
+                      light_level > 120):       # 光照偏强
                     status = "警告"
                 else:
                     status = "正常"

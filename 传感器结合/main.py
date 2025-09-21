@@ -11,7 +11,7 @@ import json
 import network
 import socket
 from machine import SoftI2C
-from ssd1306 import SSD1306_I2C
+import ssd1306
 
 def test_network_connectivity(server, port):
     """测试网络连通性"""
@@ -65,8 +65,7 @@ MQTT_PORT = 14871
 
 # GPIO配置（用户指定接口）
 DHT11_PIN = 4
-FLAME_AO_PIN = 14  # 火焰传感器模拟输入
-FLAME_DO_PIN = 14  # 火焰传感器使用GPIO14模拟输入
+FLAME_DO_PIN = 14  # 火焰传感器数字输入（0=有火，1=无火）
 MQ2_AO_PIN = 34   # MQ2烟雾传感器模拟输入
 MQ2_DO_PIN = 2    # MQ2烟雾传感器数字输入
 SOUND_AO_PIN = 13 # 声音传感器模拟输入
@@ -93,17 +92,25 @@ print("🔧 初始化硬件...")
 # 火焰传感器故障标志
 FLAME_SENSOR_FAILED = False  # 必须启用火焰传感器，这是火灾报警系统的核心
 
-# 初始化OLED
-i2c_oled = SoftI2C(scl=Pin(OLED_SCL), sda=Pin(OLED_SDA))
-oled = SSD1306_I2C(OLED_WIDTH, OLED_HEIGHT, i2c_oled)
-oled.fill(0)
-oled.text("ESP32 Alarm", 0, 0)
-oled.text("Initializing...", 0, 16)
-oled.show()
-
 # 初始化BH1750光照传感器
 i2c_bh1750 = SoftI2C(scl=Pin(BH1750_SCL), sda=Pin(BH1750_SDA))
 print("✅ BH1750初始化完成")
+
+# 初始化OLED显示屏
+print(f"初始化OLED显示屏 - SDA:GPIO{OLED_SDA}, SCL:GPIO{OLED_SCL}")
+try:
+    i2c = SoftI2C(scl=Pin(OLED_SCL), sda=Pin(OLED_SDA), freq=400000)
+    oled_width = 128
+    oled_height = 64
+    oled = ssd1306.SSD1306_I2C(oled_width, oled_height, i2c)
+    oled.fill(0)
+    oled.text("ESP32 Alarm", 0, 0)
+    oled.text("Initializing...", 0, 16)
+    oled.show()
+    print("✅ OLED显示屏初始化成功")
+except Exception as e:
+    print(f"❌ OLED显示屏初始化失败: {e}")
+    oled = None
 
 # 初始化舵机
 servo = PWM(Pin(SERVO_PIN), freq=50)
@@ -111,37 +118,26 @@ servo.duty(0)
 print("✅ 舵机初始化完成")
 
 # 初始化传感器
-print(f"初始化火焰传感器 - 引脚: {FLAME_AO_PIN} (模拟模式)")
-# 使用ADC读取火焰传感器模拟值
-flame_ao = ADC(Pin(FLAME_AO_PIN))
+print(f"初始化火焰传感器 - 引脚: {FLAME_DO_PIN} (数字模式)")
+# 使用数字读取火焰传感器
+flame_do = Pin(FLAME_DO_PIN, Pin.IN)
 print("✅ 火焰传感器初始化成功")
 
 mq2_ao = ADC(Pin(MQ2_AO_PIN))
 mq2_do = Pin(MQ2_DO_PIN, Pin.IN)
 sound_do = Pin(SOUND_DO_PIN, Pin.IN)
 
-# 设置ADC衰减（火焰传感器使用模拟模式，MQ2使用模拟模式）
-print("设置ADC衰减...")
-try:
-    # 火焰传感器设置ADC衰减
-    flame_ao.atten(flame_ao.ATTN_11DB)  # 0-3.3V范围
-    print("✅ 火焰传感器模拟模式设置成功")
-except Exception as e:
-    print(f"火焰传感器设置失败: {e}")
-
-try:
-    # mq2_ao不设置衰减，避免GPIO34的衰减问题
-    print("✅ MQ2传感器初始化成功（跳过衰减设置）")
-except Exception as e:
-    print(f"⚠️ MQ2传感器设置失败: {e}")
+# MQ2传感器不设置衰减，避免GPIO34的衰减问题
+print("✅ MQ2传感器初始化成功（跳过衰减设置）")
 
 print("✅ 传感器初始化完成")
 
 # 测试火焰传感器读取
 print("测试火焰传感器读取...")
 try:
-    test_flame_value = flame_ao.read()
-    print(f"✅ 火焰传感器测试读取成功: 模拟值={test_flame_value}")
+    test_flame_value = flame_do.value()
+    flame_status = "检测到火焰" if test_flame_value == 0 else "正常"
+    print(f"✅ 火焰传感器测试读取成功: 数字值={test_flame_value} ({flame_status})")
 except Exception as e:
     print(f"❌ 火焰传感器测试读取失败: {e}")
 
@@ -154,6 +150,304 @@ try:
 except Exception as e:
     SOUND_ANALOG_AVAILABLE = False
     print(f"⚠️ 声音传感器初始化失败: {e}")
+
+# ==================== UDP服务器类 ====================
+class UDPServer:
+    def __init__(self, port=8888):
+        self.port = port
+        self.socket = None
+        self.running = False
+        self.broadcast_socket = None
+        self.slave_send_socket = None
+
+    def start(self):
+        """启动UDP服务器"""
+        try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.socket.bind(('0.0.0.0', self.port))
+            self.socket.settimeout(0.1)  # 设置超时以避免阻塞主循环
+
+            # 创建发送socket用于向从机发送数据
+            self.slave_send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.slave_send_socket.settimeout(1.0)
+
+            self.running = True
+            print(f"✅ UDP服务器启动成功，监听端口: {self.port}")
+            return True
+        except Exception as e:
+            print(f"❌ UDP服务器启动失败: {e}")
+            return False
+
+    def receive_data(self):
+        """接收UDP数据"""
+        if not self.running or not self.socket:
+            return None
+
+        try:
+            data, addr = self.socket.recvfrom(512)
+            client_ip = addr[0]
+            client_port = addr[1]
+
+            # 添加调试信息：显示所有收到的UDP数据
+            print(f"📨 收到UDP数据 - 来自: {client_ip}:{client_port}, 大小: {len(data)}字节")
+
+            # 解析JSON数据
+            try:
+                json_data = json.loads(data.decode('utf-8'))
+                print(f"📦 数据类型: {json_data.get('type', 'unknown')}")
+                return json_data, client_ip, client_port
+            except json.JSONDecodeError:
+                print(f"❌ JSON解析失败 - 来自 {client_ip}:{client_port}")
+                print(f"   原始数据: {data}")
+                return None
+
+        except Exception as e:
+            # MicroPython socket超时或其他异常
+            print(f"❌ UDP接收错误: {e}")
+            return None
+
+    def send_response(self, target_ip, target_port, response_data):
+        """发送响应数据"""
+        if not self.running or not self.socket:
+            return False
+
+        try:
+            json_data = json.dumps(response_data)
+            self.socket.sendto(json_data.encode(), (target_ip, target_port))
+            print(f"📤 已发送响应到 {target_ip}:{target_port}")
+            return True
+        except Exception as e:
+            print(f"❌ 发送响应失败: {e}")
+            return False
+
+    def send_master_data_to_slaves(self, slave_devices, master_data):
+        """向所有从机发送主机数据"""
+        if not self.slave_send_socket:
+            return False
+
+        try:
+            success_count = 0
+            for slave_id, slave_info in slave_devices.items():
+                if slave_info['status'] == 'online':
+                    slave_ip = slave_info['ip']
+                    # 从机接收端口是8889
+                    slave_port = 8889
+
+                    # 构建主机数据消息
+                    master_message = {
+                        "type": "master_data",
+                        "timestamp": time.time(),
+                        "data": master_data
+                    }
+
+                    # 发送数据
+                    json_data = json.dumps(master_message)
+                    self.slave_send_socket.sendto(json_data.encode(), (slave_ip, slave_port))
+                    success_count += 1
+
+            if success_count > 0:
+                print(f"📤 主机数据已发送到{success_count}个从机")
+            return success_count > 0
+
+        except Exception as e:
+            print(f"❌ 发送主机数据到从机失败: {e}")
+            return False
+
+    def stop(self):
+        """停止UDP服务器"""
+        if self.socket:
+            self.socket.close()
+        if self.broadcast_socket:
+            self.broadcast_socket.close()
+        if self.slave_send_socket:
+            self.slave_send_socket.close()
+        self.running = False
+        print("UDP服务器已停止")
+
+# ==================== 从机数据处理类 ====================
+class SlaveDataManager:
+    def __init__(self):
+        self.slave_devices = {}  # 存储从机信息
+        self.slave_data = {}     # 存储从机传感器数据
+        self.master_data = {}    # 存储主机传感器数据，用于同步给从机
+
+    def process_slave_data(self, data, client_ip, client_port=None):
+        """处理从机数据"""
+        try:
+            message_type = data.get('type', 'unknown')
+            slave_id = data.get('slave_id', 'unknown')
+
+            # 更新从机信息
+            if slave_id not in self.slave_devices:
+                self.slave_devices[slave_id] = {
+                    'slave_id': slave_id,
+                    'slave_name': data.get('slave_name', slave_id),
+                    'ip': client_ip,
+                    'last_seen': time.time(),
+                    'status': 'online',
+                    'sensors': data.get('sensors', {})
+                }
+                print(f"📱 新从机注册: {slave_id} ({client_ip})")
+            else:
+                self.slave_devices[slave_id]['last_seen'] = time.time()
+                self.slave_devices[slave_id]['status'] = 'online'
+
+            # 处理不同类型的消息
+            if message_type == 'sensor_data':
+                return self.process_sensor_data(data, slave_id)
+            elif message_type == 'startup':
+                return self.process_startup_data(data, slave_id, client_ip)
+            elif message_type == 'test':
+                print(f"🔧 收到测试消息 - 从机: {slave_id}")
+                return True
+            elif message_type == 'discover':
+                return self.process_discover_request(data, slave_id, client_ip, client_port)
+            else:
+                print(f"⚠️ 未知消息类型: {message_type}")
+                return False
+
+        except Exception as e:
+            print(f"❌ 从机数据处理错误: {e}")
+            return False
+
+    def process_sensor_data(self, data, slave_id):
+        """处理传感器数据"""
+        try:
+            sensors = data.get('sensors', {})
+            overall_status = data.get('overall_status', 'normal')
+            sequence = data.get('sequence', 0)
+
+            # 提取传感器数据
+            flame_data = sensors.get('flame', {})
+            mq2_data = sensors.get('mq2_smoke', {})
+
+            flame_analog = flame_data.get('analog', 0)
+            flame_status = flame_data.get('status', 'normal')
+            mq2_analog = mq2_data.get('analog', 0)
+            mq2_status = mq2_data.get('status', 'normal')
+
+            # 存储从机数据
+            self.slave_data[slave_id] = {
+                'flame_analog': flame_analog,
+                'flame_status': flame_status,
+                'mq2_analog': mq2_analog,
+                'mq2_status': mq2_status,
+                'overall_status': overall_status,
+                'timestamp': time.time(),
+                'sequence': sequence
+            }
+
+            # 更新从机设备信息
+            if slave_id in self.slave_devices:
+                self.slave_devices[slave_id]['last_seen'] = time.time()
+                self.slave_devices[slave_id]['status'] = 'online'
+
+            # 打印接收到的数据
+            print(f"📨 从机数据 - {slave_id} 序列:{sequence}")
+            print(f"   火焰:{flame_analog}({flame_status}) | 烟雾:{mq2_analog}({mq2_status}) | 整体:{overall_status}")
+
+            # 检查是否需要触发警报
+            if overall_status == 'alarm':
+                print(f"🚨 从机{slave_id}检测到火灾风险！")
+                return True
+            elif overall_status == 'warning':
+                print(f"⚠️  从机{slave_id}环境异常！")
+                return True
+
+            return True
+
+        except Exception as e:
+            print(f"❌ 传感器数据处理错误: {e}")
+            return False
+
+    def process_startup_data(self, data, slave_id, client_ip):
+        """处理启动数据"""
+        try:
+            slave_name = data.get('slave_name', slave_id)
+            sensors = data.get('sensors', [])
+
+            print(f"📱 从机启动 - {slave_name} ({slave_id}) IP:{client_ip}")
+            print(f"   传感器: {', '.join(sensors)}")
+
+            # 更新从机信息
+            self.slave_devices[slave_id].update({
+                'slave_name': slave_name,
+                'ip': client_ip,
+                'sensors': sensors,
+                'last_seen': time.time(),
+                'status': 'online'
+            })
+
+            return True
+
+        except Exception as e:
+            print(f"❌ 启动数据处理错误: {e}")
+            return False
+
+    def update_master_data(self, flame_analog, flame_status, mq2_analog, mq2_status, temperature, humidity, status):
+        """更新主机传感器数据"""
+        self.master_data = {
+            'flame_analog': flame_analog,
+            'flame_status': flame_status,
+            'mq2_analog': mq2_analog,
+            'mq2_status': mq2_status,
+            'temperature': temperature,
+            'humidity': humidity,
+            'status': status,
+            'timestamp': time.time()
+        }
+
+    def check_slave_status(self):
+        """检查从机状态"""
+        current_time = time.time()
+        offline_slaves = []
+
+        for slave_id, info in self.slave_devices.items():
+            if current_time - info['last_seen'] > 60:  # 60秒未收到数据认为离线
+                info['status'] = 'offline'
+                offline_slaves.append(slave_id)
+
+        if offline_slaves:
+            print(f"⚠️  以下从机可能离线: {', '.join(offline_slaves)}")
+
+        return len(offline_slaves)
+
+    def process_discover_request(self, data, slave_id, client_ip, client_port):
+        """处理从机发现请求"""
+        try:
+            print(f"🔍 收到从机发现请求 - {slave_id} ({client_ip}:{client_port})")
+
+            # 获取主机IP地址
+            host_ip = network.WLAN(network.STA_IF).ifconfig()[0]
+            print(f"📡 主机IP: {host_ip}, 准备响应到 {client_ip}:{client_port}")
+
+            # 构建响应数据
+            response = {
+                "type": "discover_response",
+                "host_id": DEVICE_ID,
+                "host_name": "主机-01",
+                "host_ip": host_ip,
+                "host_port": 8888,
+                "timestamp": time.time(),
+                "message": f"主机{host_ip}响应发现请求"
+            }
+
+            # 通过UDP服务器发送响应
+            if hasattr(self, 'udp_server') and self.udp_server:
+                print(f"📤 正在发送发现响应到 {client_ip}:{client_port}")
+                result = self.udp_server.send_response(client_ip, client_port, response)
+                if result:
+                    print(f"✅ 发现响应发送成功")
+                else:
+                    print(f"❌ 发现响应发送失败")
+                return result
+            else:
+                print("❌ UDP服务器不可用，无法发送响应")
+                return False
+
+        except Exception as e:
+            print(f"❌ 处理发现请求错误: {e}")
+            return False
 
 # ==================== MQTT客户端类 ====================
 class SimpleMQTTClient:
@@ -307,24 +601,24 @@ flame_backup_pin = 27  # 备用引脚
 flame_using_backup = False
 
 def read_flame():
-    """读取火焰传感器 - 模拟模式"""
+    """读取火焰传感器 - 数字模式"""
     try:
-        # 读取模拟值
-        analog_value = flame_ao.read()
+        # 读取数字值
+        digital_value = flame_do.value()
 
-        # 根据模拟值判断火焰状态
-        if analog_value < 500:  # 检测到火焰
-            print(f"🔥 火焰传感器: {analog_value} (检测到火焰)")
-            digital_value = 0
+        # 数字值：0=检测到火焰，1=正常
+        if digital_value == 0:  # 检测到火焰
+            print(f"🔥 火焰传感器: 检测到火焰!")
+            analog_value = 0  # 用于显示的模拟值
         else:  # 正常状态
-            print(f"✅ 火焰传感器: {analog_value} (正常)")
-            digital_value = 1
+            print(f"✅ 火焰传感器: 正常")
+            analog_value = 1500  # 用于显示的模拟值，设置为高值避免误报警
 
         return analog_value, digital_value
 
     except Exception as e:
-        print(f"火焰传感器读取错误: {e}")
-        return 4095, 1  # 默认返回正常状态
+        print(f"❌ 火焰传感器读取错误: {e}")
+        return 1, 1  # 默认返回正常状态
 
 def read_mq2():
     """读取MQ2烟雾传感器"""
@@ -433,7 +727,7 @@ def check_fire_alarm(flame_analog, mq2_analog, temperature, light_level):
     elif temperature is not None and temperature > 40:
         alarm_condition = True
         print(f"🌡️ 温度警报: temperature={temperature}")
-    elif light_level is not None and light_level > 30:
+    elif light_level is not None and light_level > 120:
         alarm_condition = True
         print(f"💡 光照警报: light_level={light_level}")
 
@@ -453,7 +747,7 @@ def check_fire_alarm(flame_analog, mq2_analog, temperature, light_level):
     elif temperature is not None and temperature > 35:
         warning_condition = True
         print(f"🌡️ 温度警告: temperature={temperature}")
-    elif light_level is not None and light_level > 20:
+    elif light_level is not None and light_level > 120:
         warning_condition = True
         print(f"💡 光照警告: light_level={light_level}")
 
@@ -463,25 +757,66 @@ def check_fire_alarm(flame_analog, mq2_analog, temperature, light_level):
     return "normal"
 
 # ==================== OLED显示函数 ====================
-def update_oled_display(flame_analog, flame_digital, mq2_analog, mq2_digital, sound_analog, sound_digital, temperature, humidity, status):
-    """更新OLED显示"""
+def update_oled_display(flame_analog, flame_digital, mq2_analog, mq2_digital, sound_analog, sound_digital, temperature, humidity, status, slave_data_manager=None):
+    """更新OLED显示 - 包含主机和从机数据"""
+    if oled is None:
+        return  # OLED不可用，直接返回
+
     oled.fill(0)
 
     # 标题
     oled.text("Fire Alarm System", 0, 0)
 
-    # 传感器数据
-    oled.text(f"Flame: {flame_analog}", 0, 16)
-    oled.text(f"Smoke: {mq2_analog}", 0, 26)
-    oled.text(f"Temp: {temperature}C", 0, 36)
-    oled.text(f"Humi: {humidity}%", 0, 46)
+    # 主机传感器数据 - 火焰用图标显示
+    flame_icon = "🔥" if flame_digital == 0 else "✅"
+    oled.text(f"{flame_icon}M:{mq2_analog}", 0, 16)
+    oled.text(f"T:{temperature}C H:{humidity}%", 0, 26)
 
-    # 状态
-    if len(status) > 12:
-        oled.text(status[:12], 0, 56)
+    # 显示从机数据
+    if slave_data_manager and slave_data_manager.slave_data:
+        # 获取第一个从机的数据（显示第一个在线从机）
+        first_slave_id = list(slave_data_manager.slave_data.keys())[0]
+        slave_data = slave_data_manager.slave_data[first_slave_id]
+
+        # 显示从机数据 - 火焰用图标显示
+        slave_flame_icon = "🔥" if slave_data.get('flame_analog', 1) == 0 else "✅"
+        oled.text(f"{slave_flame_icon}S:{slave_data['mq2_analog']}", 0, 36)
+
+        # 显示状态
+        master_status_short = "正常" if status == "normal" else ("警告" if status == "warning" else "警报")
+        slave_status_short = "正常" if slave_data['overall_status'] == "normal" else ("警告" if slave_data['overall_status'] == "warning" else "警报")
+
+        oled.text(f"M:{master_status_short}|S:{slave_status_short}", 0, 46)
+
+        # 显示从机数量和状态
+        online_count = sum(1 for info in slave_data_manager.slave_devices.values() if info['status'] == 'online')
+        oled.text(f"S:{online_count}", 70, 46)
     else:
-        oled.text(status, 0, 56)
+        # 没有从机时显示主机详细状态
+        status_short = "正常" if status == "normal" else ("警告" if status == "warning" else "警报")
+        oled.text(f"Status:{status_short}", 0, 36)
+        oled.text("No Slaves", 0, 46)
 
+    # 底部显示整体状态和时间信息
+    current_time = time.ticks_ms()
+    time_seconds = (current_time // 1000) % 60
+    oled.text(f"{time_seconds}s", 100, 56)
+
+    oled.show()
+
+def update_oled_simple(title, line1="", line2="", line3=""):
+    """简单的OLED显示函数"""
+    if oled is None:
+        return  # OLED不可用，直接返回
+
+    oled.fill(0)
+    oled.text(title, 0, 0)
+    if line1:
+        oled.text(line1, 0, 16)
+    if line2:
+        oled.text(line2, 0, 32)
+    if line3:
+        oled.text(line3, 0, 48)
     oled.show()
 
 # ==================== 系统状态管理 ====================
@@ -523,7 +858,7 @@ class SystemStatus:
             danger_reason = "温度警报"
 
         # 检查光照
-        elif light_level is not None and light_level > 30:
+        elif light_level is not None and light_level > 120:
             danger_detected = True
             danger_reason = "光照警报"
 
@@ -571,6 +906,15 @@ def main():
 
     # 初始化系统状态
     system_status = SystemStatus()
+
+    # 初始化从机数据管理器
+    slave_manager = SlaveDataManager()
+
+    # 初始化UDP服务器
+    udp_server = UDPServer(port=8888)
+
+    # 将UDP服务器引用传递给从机管理器
+    slave_manager.udp_server = udp_server
 
     # 连接WiFi
     print("📡 连接WiFi...")
@@ -639,16 +983,26 @@ def main():
             print("   3. 检查防火墙设置")
             print("   4. 检查MQTT服务器端口配置")
 
+    # 启动UDP服务器
+    if wifi_connected:
+        udp_success = udp_server.start()
+        if udp_success:
+            print(f"✅ UDP服务器启动成功，等待从机连接...")
+        else:
+            print("❌ UDP服务器启动失败")
+
     # 更新OLED显示
-    update_oled_display(0, 0, 0, 0, 0, 0, 26, 50, "Starting...")
+    update_oled_display(0, 0, 0, 0, 0, 0, 26, 50, "Starting...", slave_manager)
 
     # 主循环
     print("📊 开始监测...")
     print("=" * 80)
 
     count = 0
+    slave_check_count = 0
     while True:
         count += 1
+        slave_check_count += 1
 
         # 读取传感器数据
         flame_analog, flame_digital = read_flame()
@@ -663,6 +1017,43 @@ def main():
         # 火灾报警检测（MQTT使用）
         alarm_status = check_fire_alarm(flame_analog, mq2_analog, temperature, light_level)
 
+        # 接收从机UDP数据
+        if wifi_connected and udp_server.running:
+            udp_data = udp_server.receive_data()
+            if udp_data:
+                json_data, client_ip, client_port = udp_data
+                slave_manager.process_slave_data(json_data, client_ip, client_port)
+
+        # 每30个循环检查一次从机状态并发送主机数据
+        if slave_check_count >= 30:
+            offline_count = slave_manager.check_slave_status()
+            if offline_count > 0:
+                print(f"⚠️  有{offline_count}个从机离线")
+
+            # 发送主机数据到从机
+            if slave_manager.master_data and slave_manager.slave_devices:
+                udp_server.send_master_data_to_slaves(slave_manager.slave_devices, slave_manager.master_data)
+
+            slave_check_count = 0
+
+        # 确定传感器状态
+        if flame_analog < 500:
+            flame_status = "alarm"
+        elif flame_analog < 1000:
+            flame_status = "warning"
+        else:
+            flame_status = "normal"
+
+        if mq2_analog < 1000:
+            mq2_status = "alarm"
+        elif mq2_analog < 1500:
+            mq2_status = "warning"
+        else:
+            mq2_status = "normal"
+
+        # 更新主机数据到从机管理器
+        slave_manager.update_master_data(flame_analog, flame_status, mq2_analog, mq2_status, temperature, humidity, status)
+
         # 显示数据
         sound_str = f"{sound_analog}" if sound_analog is not None else "N/A"
         light_str = f"{light_level}" if light_level is not None else "N/A"
@@ -670,7 +1061,7 @@ def main():
 
         # 更新OLED显示
         oled_status = f"{status}/{alarm_status}"[:10]  # 显示两种状态
-        update_oled_display(flame_analog, flame_digital, mq2_analog, mq2_digital, sound_analog, sound_digital, temperature, humidity, oled_status)
+        update_oled_display(flame_analog, flame_digital, mq2_analog, mq2_digital, sound_analog, sound_digital, temperature, humidity, oled_status, slave_manager)
 
         # 发送MQTT数据 - 发送实际传感器读数
         if mqtt_connected:

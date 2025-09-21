@@ -269,7 +269,7 @@ TEMP_WARN_THRESHOLD = 35
 HUMIDITY_WARN_THRESHOLD = 70
 
 # 环境传感器阈值
-LIGHT_DARK_THRESHOLD = 500    # 光照暗阈值（0-4095，数值越小越暗）
+LIGHT_DARK_THRESHOLD = 120    # 光照暗阈值（0-4095，数值越小越暗）
 SOUND_LOUD_THRESHOLD = 2000  # 声音响阈值（0-4095，数值越大声音越响）
 
 # 数据读取间隔（秒）
