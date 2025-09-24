@@ -47,7 +47,7 @@ def test_mqtt_connection():
 
     # MQTT配置
     MQTT_SERVER = "22.tcp.cpolar.top"
-    MQTT_PORT = 14871
+    MQTT_PORT = 10020
     DEVICE_ID = "esp32_test_01"
 
     try:

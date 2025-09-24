@@ -41,10 +41,49 @@ function initializeApp() {
     startTimers();
 }
 
-// 初始化HTTP轮询 (替代WebSocket)
+// 初始化Socket.IO连接
 function initializeSocket() {
-    console.log('使用HTTP轮询替代WebSocket...');
-    showNotification('连接成功', '已连接到火灾报警系统', 'success');
+    console.log('正在初始化WebSocket连接...');
+
+    // 建立Socket.IO连接
+    socket = io();
+
+    // 连接成功
+    socket.on('connect', function() {
+        console.log('WebSocket连接成功');
+        showNotification('连接成功', '已连接到火灾报警系统', 'success');
+    });
+
+    // 连接断开
+    socket.on('disconnect', function() {
+        console.log('WebSocket连接断开');
+        showNotification('连接断开', '正在尝试重新连接...', 'warning');
+    });
+
+    // 连接错误
+    socket.on('connect_error', function(error) {
+        console.error('WebSocket连接错误:', error);
+        showNotification('连接错误', '无法连接到服务器，使用HTTP轮询', 'warning');
+    });
+
+    // 接收实时传感器数据
+    socket.on('sensor_data', function(data) {
+        console.log('收到传感器数据:', data);
+        // 可以在这里处理实时传感器数据
+    });
+
+    // 接收报警信息 - 关键修复点！
+    socket.on('alarm', function(alarmData) {
+        console.log('收到报警消息:', alarmData);
+        handleAlarm(alarmData);
+    });
+
+    // 接收设备状态更新
+    socket.on('devices_update', function(devicesData) {
+        console.log('收到设备状态更新:', devicesData);
+        updateDevices(devicesData);
+        updateStatusOverview(devicesData);
+    });
 }
 
 // 加载初始数据

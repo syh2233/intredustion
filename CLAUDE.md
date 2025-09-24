@@ -41,8 +41,11 @@ python app.py
 ```bash
 cd web
 pip install -r requirements.txt
-# 如果requirements.txt为空，手动安装核心依赖：
-pip install flask flask-cors flask-mqtt flask-socketio paho-mqtt flask-sqlalchemy
+```
+
+如果requirements.txt为空，手动安装核心依赖：
+```bash
+pip install flask flask-cors flask-socketio flask-sqlalchemy paho-mqtt python-dateutil
 ```
 
 ### Testing the System

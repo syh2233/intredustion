@@ -15,6 +15,7 @@ Main Functions:
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
+from flask_socketio import SocketIO
 import paho.mqtt.client as mqtt
 import sqlite3
 import json
@@ -62,7 +63,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # MQTT configuration - 使用公网端口映射
 app.config['MQTT_BROKER_URL'] = '22.tcp.cpolar.top'
-app.config['MQTT_BROKER_PORT'] = 14871
+app.config['MQTT_BROKER_PORT'] = 10020
 app.config['MQTT_USERNAME'] = ''
 app.config['MQTT_PASSWORD'] = ''
 app.config['MQTT_KEEPALIVE'] = 60
@@ -71,6 +72,7 @@ app.config['MQTT_TLS_ENABLED'] = False
 # Initialize extensions with simple configuration
 db = SQLAlchemy(app)
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # MQTT client setup
 mqtt_client = mqtt.Client()
@@ -299,16 +301,15 @@ def process_sensor_data(data):
             'overall_status': data.get('overall_status', 'normal' if not alert_status else 'alarm')
         }
 
-        # Temporarily disable SocketIO to fix threading issues
         # Real-time push to frontend via WebSocket (for old UI)
-        # socketio.emit('sensor_data', frontend_data)
+        socketio.emit('sensor_data', frontend_data)
 
         # Send device update to 5-layer architecture UI
-        # send_device_update_to_ui(device_id)
+        send_device_update_to_ui(device_id)
 
         # Special handling for slave data
         if is_slave_data:
-            # socketio.emit('slave_data_update', frontend_data)
+            socketio.emit('slave_data_update', frontend_data)
             logger.info(f"Slave data saved and pushed: {device_id}")
         else:
             logger.info(f"Master data saved and pushed: {device_id}")
@@ -347,27 +348,43 @@ def send_device_update_to_ui(device_id):
 def process_alert_data(alert_data):
     """Process alert data"""
     try:
+        # Extract data from the alert structure
+        data = alert_data.get('data', {})
+        device_id = data.get('device_id') or alert_data.get('device_id')
+
         # Save alert record
         alert = AlertHistory(
-            device_id=alert_data.get('device_id'),
-            alert_type=alert_data.get('alert_type', 'unknown'),
-            severity=alert_data.get('severity', 'medium'),
-            flame_value=alert_data.get('sensor_values', {}).get('flame'),
-            smoke_value=alert_data.get('sensor_values', {}).get('smoke'),
-            temperature=alert_data.get('sensor_values', {}).get('temperature'),
-            humidity=alert_data.get('sensor_values', {}).get('humidity'),
-            light_level=alert_data.get('sensor_values', {}).get('light'),  # 光照传感器数据
-            location=alert_data.get('location', 'Unknown location')
+            device_id=device_id,
+            alert_type=alert_data.get('type', 'unknown'),
+            severity=alert_data.get('level', 'medium'),
+            flame_value=data.get('flame'),
+            smoke_value=data.get('smoke'),
+            temperature=data.get('temperature'),
+            humidity=data.get('humidity'),
+            light_level=data.get('light'),
+            location=data.get('location', alert_data.get('location', 'Unknown location'))
         )
         db.session.add(alert)
         db.session.commit()
-        
+
         # Push alert information to frontend
-        # socketio.emit('alert_data', alert_data)
-        logger.warning(f"Alert record created: {alert_data.get('device_id')} - {alert_data.get('alert_type')}")
-        
+        alarm_data = {
+            'timestamp': data.get('timestamp', time.time()),
+            'device_id': device_id,
+            'location': data.get('location', alert_data.get('location', 'Unknown location')),
+            'temperature': data.get('temperature'),
+            'smoke_level': data.get('smoke'),
+            'status': 'alarm' if data.get('status') == 'alarm' else 'warning',
+            'message': alert_data.get('message', f"设备 {device_id} 检测到异常！")
+        }
+
+        # Send alarm notification to frontend
+        socketio.emit('alarm', alarm_data)
+        logger.warning(f"Alert record created and notification sent: {device_id} - {alert_data.get('type')}")
+
     except Exception as e:
         logger.error(f"Error processing alert data: {e}")
+        logger.error(f"Alert data content: {alert_data}")
         db.session.rollback()
 
 # Flask routes
@@ -846,5 +863,5 @@ if __name__ == '__main__':
     logger.info(f"MQTT Broker: {app.config['MQTT_BROKER_URL']}:{app.config['MQTT_BROKER_PORT']}")
     logger.info("Please check MQTT connection status in the logs...")
 
-    # 启动Flask服务器
-    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
+    # 启动Flask-SocketIO服务器
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
