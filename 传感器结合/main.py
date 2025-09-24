@@ -827,7 +827,7 @@ def check_fire_alarm(flame_analog, mq2_analog, temperature, light_level):
     if not FLAME_SENSOR_FAILED and flame_analog is not None and flame_analog < 1000:
         warning_condition = True
         print(f"🔥 火焰警告: flame_analog={flame_analog}")
-    elif mq2_analog is not None and mq2_analog < 1500:
+    elif mq2_analog is not None and mq2_analog < 1300:
         warning_condition = True
         print(f"💨 烟雾警告: mq2_analog={mq2_analog}")
     elif temperature is not None and temperature > 35:
