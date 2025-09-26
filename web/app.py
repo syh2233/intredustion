@@ -617,7 +617,7 @@ def get_devices():
                     light_level > 130):         # 光照过强
                     status = "警报"
                 elif (flame_value < 1000 or     # 火焰传感器值偏低
-                      smoke_level < 1500 or    # 烟雾浓度中等
+                      smoke_level < 1300 or    # 烟雾浓度中等
                       temperature > 35 or      # 温度偏高
                       light_level > 120):       # 光照偏强
                     status = "警告"
@@ -766,10 +766,10 @@ def get_slave_status(slave_id):
                 overall_status = 'alarm'
                 flame_status = 'alarm' if flame_value < 500 else 'normal'
                 smoke_status = 'alarm' if smoke_value < 1000 else 'normal'
-            elif flame_value < 1000 or smoke_value < 1500:
+            elif flame_value < 1000 or smoke_value < 1300:
                 overall_status = 'warning'
                 flame_status = 'warning' if flame_value < 1000 else 'normal'
-                smoke_status = 'warning' if smoke_value < 1500 else 'normal'
+                smoke_status = 'warning' if smoke_value < 1300 else 'normal'
 
         return jsonify({
             'device_id': slave_id,

@@ -39,7 +39,7 @@ OLED_SCL = 25         # OLED SCL引脚
 FLAME_ALARM_THRESHOLD = 500      # 火焰警报阈值
 FLAME_WARNING_THRESHOLD = 1000   # 火焰警告阈值
 MQ2_ALARM_THRESHOLD = 1000       # 烟雾警报阈值
-MQ2_WARNING_THRESHOLD = 1500     # 烟雾警告阈值
+MQ2_WARNING_THRESHOLD = 1300     # 烟雾警告阈值
 
 # 通信配置
 SEND_INTERVAL = 2.0      # 数据发送间隔(秒)

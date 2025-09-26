@@ -732,8 +732,8 @@ function normalizeDataForCombinedView() {
     // 火焰: 反向映射, 800-1500 -> 100-0% (值越低风险越高)
     datasets[2].data = sensorData.flame.map(flame => {
         const validFlame = typeof flame === 'number' && !isNaN(flame) ? flame : 0;
-        // 将火焰值映射到风险百分比: 800=100%, 1500=0%
-        const risk = Math.max(0, Math.min(100, ((1500 - validFlame) / 700) * 100));
+        // 将火焰值映射到风险百分比: 800=100%, 1300=0%
+        const risk = Math.max(0, Math.min(100, ((1300 - validFlame) / 500) * 100));
         return Math.round(risk);
     });
     datasets[2].label = '火焰风险 (%)';
