@@ -843,50 +843,63 @@ def check_fire_alarm(flame_analog, mq2_analog, temperature, light_level):
     return "normal"
 
 # ==================== OLED显示函数 ====================
-def update_oled_display(flame_analog, flame_digital, mq2_analog, mq2_digital, sound_analog, sound_digital, temperature, humidity, status, slave_data_manager=None):
-    """更新OLED显示 - 包含主机和从机数据"""
+def update_oled_display(flame_analog, flame_digital, mq2_analog, mq2_digital, sound_analog, sound_digital, temperature, humidity, light_level, status, slave_data_manager=None):
+    """更新OLED显示 - 修复字符截断问题"""
     if oled is None:
         return  # OLED不可用，直接返回
 
     oled.fill(0)
 
-    # 标题
-    oled.text("Fire Alarm System", 0, 0)
+    # 第1行：标题（简化）
+    oled.text("ALARM", 0, 0)
 
-    # 主机传感器数据 - 火焰用图标显示
-    flame_icon = "🔥" if flame_digital == 0 else "✅"
-    oled.text(f"{flame_icon}M:{mq2_analog}", 0, 16)
-    oled.text(f"T:{temperature}C H:{humidity}%", 0, 26)
+    # 第2行：火焰和烟雾 - 使用8像素行间距
+    oled.text(f"F:{flame_analog}", 0, 8)
+    oled.text(f"M:{mq2_analog}", 64, 8)
 
-    # 显示从机数据
-    if slave_data_manager and slave_data_manager.slave_data:
-        # 获取第一个从机的数据（显示第一个在线从机）
-        first_slave_id = list(slave_data_manager.slave_data.keys())[0]
-        slave_data = slave_data_manager.slave_data[first_slave_id]
+    # 第3行：温度和湿度
+    oled.text(f"T:{temperature}", 0, 16)
+    oled.text(f"H:{humidity}", 64, 16)
 
-        # 显示从机数据 - 火焰用图标显示
-        slave_flame_icon = "🔥" if slave_data.get('flame_analog', 1) == 0 else "✅"
-        oled.text(f"{slave_flame_icon}S:{slave_data['mq2_analog']}", 0, 36)
-
-        # 显示状态
-        master_status_short = "正常" if status == "normal" else ("警告" if status == "warning" else "警报")
-        slave_status_short = "正常" if slave_data['overall_status'] == "normal" else ("警告" if slave_data['overall_status'] == "warning" else "警报")
-
-        oled.text(f"M:{master_status_short}|S:{slave_status_short}", 0, 46)
-
-        # 显示从机数量和状态
-        online_count = sum(1 for info in slave_data_manager.slave_devices.values() if info['status'] == 'online')
-        oled.text(f"S:{online_count}", 70, 46)
+    # 第4行：光照
+    if light_level is not None:
+        light_val = min(light_level, 999)  # 限制为3位数
+        oled.text(f"L:{light_val}", 0, 24)
     else:
-        # 没有从机时显示主机详细状态
-        status_short = "正常" if status == "normal" else ("警告" if status == "warning" else "警报")
-        oled.text(f"Status:{status_short}", 0, 36)
-        oled.text("No Slaves", 0, 46)
+        oled.text("L:---", 0, 24)
 
-    # 底部显示整体状态和时间信息
+    # 第5行：系统状态
+    if status == "normal":
+        status_text = "OK"
+    elif status == "warning":
+        status_text = "WARN"
+    else:
+        status_text = "ALRM"
+    oled.text(f"ST:{status_text}", 64, 24)
+
+    # 第6行：从机信息
+    if slave_data_manager and slave_data_manager.slave_data:
+        online_count = sum(1 for info in slave_data_manager.slave_devices.values() if info['status'] == 'online')
+        oled.text(f"SL:{online_count}", 0, 32)
+    else:
+        oled.text("SL:0", 0, 32)
+
+    # 第7行：运行时间
     current_time = time.ticks_ms()
     time_seconds = (current_time // 1000) % 60
-    oled.text(f"{time_seconds}s", 100, 56)
+    oled.text(f"T:{time_seconds}s", 64, 32)
+
+    # 第8行：从机火焰数据（如果有）
+    if slave_data_manager and slave_data_manager.slave_data:
+        first_slave_id = list(slave_data_manager.slave_data.keys())[0]
+        slave_data = slave_data_manager.slave_data[first_slave_id]
+        slave_flame = min(slave_data.get('flame_analog', 0), 999)
+        oled.text(f"SF:{slave_flame}", 0, 40)
+
+    # 第9行：从机烟雾数据（如果有）
+    if slave_data_manager and slave_data_manager.slave_data:
+        slave_mq2 = min(slave_data.get('mq2_analog', 0), 999)
+        oled.text(f"SM:{slave_mq2}", 64, 40)
 
     oled.show()
 
@@ -1078,7 +1091,7 @@ def main():
             print("❌ UDP服务器启动失败")
 
     # 更新OLED显示
-    update_oled_display(0, 0, 0, 0, 0, 0, 26, 50, "Starting...", slave_manager)
+    update_oled_display(0, 0, 0, 0, 0, 0, 26, 50, 0, "Starting...", slave_manager)
 
     # 主循环
     print("📊 开始监测...")
@@ -1147,7 +1160,7 @@ def main():
 
         # 更新OLED显示
         oled_status = f"{status}/{alarm_status}"[:10]  # 显示两种状态
-        update_oled_display(flame_analog, flame_digital, mq2_analog, mq2_digital, sound_analog, sound_digital, temperature, humidity, oled_status, slave_manager)
+        update_oled_display(flame_analog, flame_digital, mq2_analog, mq2_digital, sound_analog, sound_digital, temperature, humidity, light_level, oled_status, slave_manager)
 
         # 发送MQTT数据 - 发送实际传感器读数
         if mqtt_connected:
