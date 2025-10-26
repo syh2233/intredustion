@@ -63,7 +63,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # MQTT configuration - 使用公网端口映射
 app.config['MQTT_BROKER_URL'] = '22.tcp.cpolar.top'
-app.config['MQTT_BROKER_PORT'] = 10020
+app.config['MQTT_BROKER_PORT'] = 11390
 app.config['MQTT_USERNAME'] = ''
 app.config['MQTT_PASSWORD'] = ''
 app.config['MQTT_KEEPALIVE'] = 60
@@ -87,7 +87,8 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe('esp32/+/data/json')
     client.subscribe('esp32/+/alert/#')
     client.subscribe('esp32/+/status/#')
-    logger.info("MQTT主题订阅: esp32/+/data/json, esp32/+/alert/#, esp32/+/status/#")
+    client.subscribe('esp32/+/control')  # 添加控制主题订阅
+    logger.info("MQTT主题订阅: esp32/+/data/json, esp32/+/alert/#, esp32/+/status/#, esp32/+/control")
 
 def on_disconnect(client, userdata, rc):
     """MQTT断开连接回调"""
@@ -121,6 +122,12 @@ def on_message(client, userdata, msg):
                 alert_data = json.loads(payload)
                 logger.info(f"解析的警报数据: {alert_data}")
                 process_alert_data(alert_data)
+            elif '/control' in topic:
+                logger.info("处理控制命令消息...")
+                # 处理控制命令
+                control_data = json.loads(payload)
+                logger.info(f"解析的控制命令: {control_data}")
+                process_control_data(control_data, topic)
             else:
                 logger.info(f"收到未处理主题的消息: {topic}")
 
@@ -387,6 +394,44 @@ def process_alert_data(alert_data):
         logger.error(f"Alert data content: {alert_data}")
         db.session.rollback()
 
+def process_control_data(control_data, topic):
+    """Process control command data"""
+    try:
+        device = control_data.get('device', '')
+        action = control_data.get('action', '')
+        timestamp = control_data.get('timestamp', 0)
+
+        logger.info(f"收到控制命令 - 设备: {device}, 动作: {action}, 时间戳: {timestamp}")
+
+        # 处理舵机控制命令
+        if device == 'servo':
+            if action == 'on':
+                logger.info("舵机开启命令 - 转到180度")
+                # 这里可以选择记录日志或发送到前端
+                socketio.emit('servo_status', {'status': 'on', 'angle': 180})
+
+            elif action == 'off':
+                logger.info("舵机关闭命令 - 转到0度")
+                socketio.emit('servo_status', {'status': 'off', 'angle': 0})
+
+            elif action == 'test' and 'angle' in control_data:
+                angle = control_data.get('angle', 0)
+                logger.info(f"舵机测试命令 - 转到{angle}度")
+                socketio.emit('servo_status', {'status': 'test', 'angle': angle})
+
+            else:
+                logger.warning(f"未知的舵机控制动作: {action}")
+
+        else:
+            logger.info(f"收到其他设备控制命令: {device} - {action}")
+
+        # 可以在这里添加控制历史记录
+        logger.info(f"控制命令处理完成: {control_data}")
+
+    except Exception as e:
+        logger.error(f"处理控制命令时发生错误: {e}")
+        logger.error(f"控制命令内容: {control_data}")
+
 # Flask routes
 @app.route('/test_slaves')
 def test_slaves():
@@ -508,6 +553,26 @@ def get_alerts():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/alerts/<int:alert_id>/resolve', methods=['PUT'])
+def resolve_alert(alert_id):
+    """Mark an alert as resolved"""
+    try:
+        alert = AlertHistory.query.get(alert_id)
+        if not alert:
+            return jsonify({'error': 'Alert not found'}), 404
+
+        alert.resolved = True
+        alert.resolved_time = datetime.utcnow()
+        db.session.commit()
+
+        logger.info(f"Alert {alert_id} marked as resolved")
+        return jsonify({'status': 'success', 'message': 'Alert resolved'})
+
+    except Exception as e:
+        logger.error(f"Error resolving alert {alert_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/data', methods=['POST'])
 def receive_data():
     """Receive sensor data via HTTP POST (backup method)"""
@@ -576,6 +641,75 @@ def mqtt_publish_test():
         })
     except Exception as e:
         logger.error(f"Error publishing test message: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/servo/control', methods=['POST'])
+def servo_control():
+    """舵机控制API接口"""
+    try:
+        data = request.get_json()
+        action = data.get('action', '')
+
+        logger.info(f"收到舵机控制请求 - 动作: {action}")
+
+        # MQTT主题和命令配置（与direct_mqtt_test.py保持一致）
+        topic = "esp32/esp32_fire_alarm_01/control"
+
+        if action == 'on':
+            # 开启舵机：从0度转到180度
+            command = {
+                "device": "servo",
+                "action": "test",
+                "angle": 180,
+                "timestamp": int(time.time())
+            }
+            message = json.dumps(command)
+
+            # 发布MQTT消息
+            result = mqtt_client.publish(topic, message)
+
+            if result == 0:  # paho-mqtt publish返回0表示成功
+                logger.info(f"舵机开启命令已发送: {message}")
+                return jsonify({
+                    'status': 'success',
+                    'action': 'on',
+                    'message': '舵机开启命令已发送（0→180度）',
+                    'timestamp': datetime.utcnow().isoformat()
+                })
+            else:
+                logger.error(f"舵机开启命令发送失败: {result}")
+                return jsonify({'error': f'MQTT发送失败: {result}'}), 500
+
+        elif action == 'off':
+            # 关闭舵机：从180度转到90度
+            command = {
+                "device": "servo",
+                "action": "off",
+                "timestamp": int(time.time())
+            }
+            message = json.dumps(command)
+
+            # 发布MQTT消息
+            result = mqtt_client.publish(topic, message)
+
+            if result == 0:  # paho-mqtt publish返回0表示成功
+                logger.info(f"舵机关闭命令已发送: {message}")
+                return jsonify({
+                    'status': 'success',
+                    'action': 'off',
+                    'message': '舵机关闭命令已发送（180→90度）',
+                    'timestamp': datetime.utcnow().isoformat()
+                })
+            else:
+                logger.error(f"舵机关闭命令发送失败: {result}")
+                return jsonify({'error': f'MQTT发送失败: {result}'}), 500
+
+        else:
+            logger.warning(f"未知的舵机控制动作: {action}")
+            return jsonify({'error': f'未知的控制动作: {action}'}), 400
+
+    except Exception as e:
+        logger.error(f"舵机控制API错误: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ESP32 Fire Alarm System API Routes
@@ -738,6 +872,62 @@ def get_slave_data(slave_id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/slaves/<slave_id>/status')
+def get_slave_status(slave_id):
+    """Get specific slave device status"""
+    try:
+        slave = Slave.query.filter_by(id=slave_id).first()
+        if not slave:
+            return jsonify({'error': '从机设备不存在'}), 404
+
+        return jsonify({
+            'id': slave.id,
+            'device_id': slave.device_id,
+            'name': slave.name,
+            'status': slave.status,
+            'last_seen': slave.last_seen.isoformat() if slave.last_seen else None,
+            'created_at': slave.created_at.isoformat() if slave.created_at else None
+        })
+    except Exception as e:
+        return jsonify({'error': f'获取从机状态失败: {str(e)}'}), 500
+
+@app.route('/api/sensor/history')
+def get_sensor_history():
+    """Get sensor data history for miniprogram"""
+    try:
+        # 获取查询参数
+        limit = int(request.args.get('limit', 100))  # 默认获取最近100条记录
+        device_id = request.args.get('device_id')  # 可选的设备ID过滤
+
+        # 构建查询
+        query = SensorData.query
+
+        if device_id:
+            query = query.filter_by(device_id=device_id)
+
+        # 按时间倒序排列，获取最新的数据
+        history = query.order_by(SensorData.timestamp.desc()).limit(limit).all()
+
+        result = []
+        for record in history:
+            result.append({
+                'id': record.id,
+                'device_id': record.device_id,
+                'device_type': record.device_type,
+                'flame': record.flame_value,
+                'smoke': record.smoke_value,
+                'temperature': record.temperature,
+                'humidity': record.humidity,
+                'light': record.light_level,
+                'alert': record.alert_status,
+                'timestamp': record.timestamp.isoformat()
+            })
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"Error getting sensor history: {e}")
+        return jsonify({'error': str(e)}), 500
+
 def get_slave_status(slave_id):
     """Get current status of specific slave"""
     try:

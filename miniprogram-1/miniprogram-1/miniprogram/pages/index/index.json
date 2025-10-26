@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "智能火灾预警设备",
+  "usingComponents": {
+    "cloud-tip-modal": "/components/cloudTipModal/index"
+  }
+}

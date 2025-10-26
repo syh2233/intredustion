@@ -62,7 +62,7 @@ WIFI_PASSWORD = "12345678"
 
 # MQTT配置 - 使用公网端口映射·
 MQTT_SERVER = "22.tcp.cpolar.top"
-MQTT_PORT = 10020
+MQTT_PORT = 11390
 
 # GPIO配置（用户指定接口）
 DHT11_PIN = 4
@@ -618,6 +618,66 @@ class SimpleMQTTClient:
             self.connected = False
             return False
 
+    def check_msg(self):
+        """检查接收到的MQTT消息"""
+        try:
+            if not self.connected or not self.sock:
+                return None
+
+            self.sock.settimeout(0.1)
+            try:
+                data = self.sock.recv(512)
+                if not data:
+                    return None
+
+                if len(data) < 2:
+                    return None
+
+                msg_type = (data[0] & 0xF0) >> 4
+
+                if msg_type == 3:  # PUBLISH
+                    # 解析剩余长度
+                    remaining_len = data[1]
+                    pos = 2
+                    if remaining_len >= 128:
+                        remaining_len = data[2]
+                        pos = 3
+
+                    # 解析主题长度
+                    if pos + 1 >= len(data):
+                        return None
+
+                    topic_len = (data[pos] << 8) | data[pos+1]
+                    pos += 2
+
+                    # 解析主题
+                    if pos + topic_len > len(data):
+                        return None
+
+                    topic = data[pos:pos+topic_len].decode()
+                    pos += topic_len
+
+                    # 解析消息内容
+                    message_len = remaining_len - topic_len - 2
+                    if pos + message_len > len(data):
+                        return None
+
+                    message = data[pos:pos+message_len].decode()
+
+                    # 检查是否匹配控制主题
+                    control_topic = f"esp32/{DEVICE_ID}/control"
+                    if topic == control_topic:
+                        return message
+                    else:
+                        return None
+
+            except OSError:
+                return None
+        except Exception as e:
+            print(f"❌ MQTT检查消息异常: {e}")
+            self.connected = False
+            return None
+
 # ==================== 传感器读取函数 ====================
 # 火焰传感器状态管理
 flame_zero_count = 0
@@ -1062,6 +1122,28 @@ def main():
         if can_connect:
             print("✅ 网络连通性正常")
             mqtt_connected = mqtt_client.connect()
+            # MQTT连接成功后订阅控制主题
+            if mqtt_connected:
+                try:
+                    control_topic = f"esp32/{DEVICE_ID}/control"
+                    # 手动构建订阅消息
+                    topic_bytes = control_topic.encode()
+                    packet_id = 1
+                    subscribe_msg = bytearray()
+                    subscribe_msg.append(0x82)  # SUBSCRIBE
+                    remaining_len = 2 + 2 + len(topic_bytes) + 1
+                    subscribe_msg.append(remaining_len)
+                    subscribe_msg.append(packet_id >> 8)
+                    subscribe_msg.append(packet_id & 0xFF)
+                    subscribe_msg.append(len(topic_bytes) >> 8)
+                    subscribe_msg.append(len(topic_bytes) & 0xFF)
+                    subscribe_msg.extend(topic_bytes)
+                    subscribe_msg.append(0x00)  # QoS 0
+
+                    mqtt_client.sock.send(subscribe_msg)
+                    print(f"✅ 已订阅MQTT控制主题: {control_topic}")
+                except Exception as e:
+                    print(f"⚠️ MQTT订阅失败: {e}")
         else:
             print(f"❌ 网络连通性测试失败: {error}")
             if "Host is unreachable" in error or "EHOSTUNREACH" in error:
@@ -1227,8 +1309,83 @@ def main():
             if count % 10 == 0:  # 每10次循环尝试重连一次
                 print("🔄 尝试重连MQTT...")
                 mqtt_connected = mqtt_client.connect()
-                if not mqtt_connected:
+                if mqtt_connected:
+                    # 重连成功后重新订阅控制主题
+                    try:
+                        control_topic = f"esp32/{DEVICE_ID}/control"
+                        topic_bytes = control_topic.encode()
+                        packet_id = 1
+                        subscribe_msg = bytearray()
+                        subscribe_msg.append(0x82)  # SUBSCRIBE
+                        remaining_len = 2 + 2 + len(topic_bytes) + 1
+                        subscribe_msg.append(remaining_len)
+                        subscribe_msg.append(packet_id >> 8)
+                        subscribe_msg.append(packet_id & 0xFF)
+                        subscribe_msg.append(len(topic_bytes) >> 8)
+                        subscribe_msg.append(len(topic_bytes) & 0xFF)
+                        subscribe_msg.extend(topic_bytes)
+                        subscribe_msg.append(0x00)  # QoS 0
+
+                        mqtt_client.sock.send(subscribe_msg)
+                        print(f"✅ 重连后重新订阅MQTT控制主题: {control_topic}")
+                    except Exception as e:
+                        print(f"⚠️ 重连后MQTT订阅失败: {e}")
+                else:
                     print("❌ 重连失败")
+
+        # 检查MQTT控制消息（如果连接成功）
+        if mqtt_connected:
+            control_message = mqtt_client.check_msg()
+            if control_message:
+                print(f"📨 收到MQTT控制消息: {control_message}")
+                try:
+                    command = json.loads(control_message)
+                    device = command.get('device', '')
+                    action = command.get('action', '')
+
+                    print(f"🎛 解析MQTT命令 - 设备: {device}, 动作: {action}")
+
+                    if device == 'servo':
+                        angle = command.get('angle', None)
+                        if action == 'on':
+                            system_status.set_servo_angle(180)
+                            print("✅ 舵机已开启 (180度)")
+                        elif action == 'off':
+                            system_status.set_servo_angle(90)
+                            print("✅ 舵机已关闭 (90度)")
+                        elif action == 'test':
+                            if angle is not None:
+                                angle = max(0, min(180, angle))
+                                system_status.set_servo_angle(angle)
+                                print(f"✅ 舵机测试 - 转到{angle}度")
+                            else:
+                                print("⚠️ 舵机测试命令缺少角度参数")
+                        else:
+                            print(f"⚠️ 未知的舵机动作: {action}")
+
+                        # 发送执行结果反馈
+                        result_msg = {
+                            "device_id": DEVICE_ID,
+                            "result": True,
+                            "action": action,
+                            "angle": system_status.current_servo_angle,
+                            "timestamp": time.time(),
+                            "phase": 1
+                        }
+                        feedback_topic = f"esp32/{DEVICE_ID}/control/result"
+                        mqtt_client.publish(feedback_topic, json.dumps(result_msg))
+                        print(f"✅ 舵机控制结果已反馈")
+                    else:
+                        print(f"⚠️ 非舵机控制命令: {device}")
+
+                except Exception as e:
+                    print(f"❌ MQTT控制命令处理失败: {e}")
+
+        # 内存管理和看门狗保护
+        if count % 30 == 0:  # 每30次循环清理内存
+            import gc
+            gc.collect()
+            print("🧹 内存清理完成")
 
         # 等待下次循环
         time.sleep(1.5)

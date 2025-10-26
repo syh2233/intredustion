@@ -1,0 +1,93 @@
+<!--pages/light/light.wxml-->
+<view class="container">
+  <!-- 状态栏 -->
+  <view class="status-bar">
+    <view class="status-item">
+      <text class="status-label">设备状态</text>
+      <text class="status-value {{isOnline ? 'online' : 'offline'}}">
+        {{isOnline ? '在线' : '离线'}}
+      </text>
+    </view>
+    <view class="status-item">
+      <text class="status-label">最后更新</text>
+      <text class="status-value">{{lastUpdate}}</text>
+    </view>
+  </view>
+
+  <!-- 光照值显示卡片 -->
+  <view class="light-card">
+    <view class="light-header">
+      <text class="light-title">当前光照强度</text>
+      <view class="refresh-btn" bindtap="refreshData">
+        <text class="refresh-icon {{loading ? 'rotating' : ''}}">🔄</text>
+      </view>
+    </view>
+
+    <view class="light-display">
+      <view class="light-value-wrapper">
+        <text class="light-value">{{lightValue}}</text>
+        <text class="light-unit">{{lightUnit}}</text>
+      </view>
+      <view class="light-status {{currentStatus === '正常' ? 'status-normal' : 'status-warning'}}">
+        <text class="status-icon">{{lightLevel.icon}}</text>
+        <text class="status-text">{{lightLevel.label}} - {{currentStatus}}</text>
+      </view>
+    </view>
+
+    <view class="light-levels">
+      <view class="level-item" wx:for="{{lightLevels}}" wx:key="max">
+        <view class="level-dot" style="background-color: {{item.color}}"></view>
+        <text class="level-label">{{item.icon}} {{item.label}}</text>
+        <text class="level-value" wx:if="{{item.max !== Infinity}}">≤{{item.max}}</text>
+        <text class="level-value" wx:else>{{item.max === Infinity ? '+' : item.max}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 控制面板 -->
+  <view class="control-panel">
+    <view class="control-item">
+      <view class="control-header">
+        <text class="control-title">光照阈值</text>
+        <text class="control-desc">{{lightThreshold}} lux</text>
+      </view>
+      <button class="control-btn" bindtap="setThreshold">设置阈值</button>
+    </view>
+
+    <view class="control-item">
+      <view class="control-header">
+        <text class="control-title">自动控制</text>
+        <text class="control-desc">{{autoControl ? '已开启' : '已关闭'}}</text>
+      </view>
+      <switch class="control-switch" checked="{{autoControl}}" bindchange="toggleAutoControl" />
+    </view>
+  </view>
+
+  <!-- 光照趋势图表 -->
+  <view class="chart-section">
+    <view class="chart-header">
+      <text class="chart-title">光照趋势图</text>
+      <text class="chart-subtitle">最近{{chartData.length}}次测量</text>
+    </view>
+    <view class="chart-container">
+      <canvas
+        canvas-id="lightChart"
+        class="light-chart"
+        width="300"
+        height="200">
+      </canvas>
+    </view>
+  </view>
+
+  <!-- 操作按钮 -->
+  <view class="action-buttons">
+    <button class="action-btn primary" bindtap="refreshData">
+      <text class="btn-icon">🔄</text>
+      <text>刷新数据</text>
+    </button>
+    <button class="action-btn secondary" bindtap="goBack">
+      <text class="btn-icon">🔙</text>
+      <text>返回首页</text>
+    </button>
+  </view>
+</view>

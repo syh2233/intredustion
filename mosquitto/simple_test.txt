@@ -1,0 +1,19 @@
+简单的测试命令:
+
+1. 启动Mosquitto:
+   mosquitto.exe -c mosquitto_simple.conf -v
+
+2. 测试发布消息:
+   mosquitto_pub.exe -h 192.168.24.23 -t test/simple -m "Hello"
+
+3. 测试订阅消息:
+   mosquitto_sub.exe -h 192.168.24.23 -t test/simple -v
+
+4. 监控ESP32数据:
+   mosquitto_sub.exe -h 192.168.24.23 -t "esp32/#" -v
+
+5. 检查端口监听:
+   netstat -an | findstr :1883
+
+6. 检查进程:
+   tasklist | findstr mosquitto

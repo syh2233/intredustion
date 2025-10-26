@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(netstat:*)",
+      "Bash(ss:*)",
+      "Bash(./mosquitto:*)",
+      "Bash(sudo apt:*)",
+      "Bash(python3:*)",
+      "Bash(telnet:*)",
+      "Bash(nc:*)",
+      "Bash(.:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

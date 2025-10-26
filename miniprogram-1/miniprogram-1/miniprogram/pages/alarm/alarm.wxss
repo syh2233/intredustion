@@ -1,0 +1,166 @@
+.alarm-container {
+  padding: 16rpx;
+  background-color: #f5f5f5;
+  min-height: 100vh;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 50vh;
+}
+
+.loading-text {
+  font-size: 32rpx;
+  color: #666;
+  text-align: center;
+}
+
+.alarm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx 0;
+  margin-bottom: 16rpx;
+}
+
+.header-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.clear-button {
+  background-color: #f53f3f;
+  color: white;
+  padding: 12rpx 24rpx;
+  font-size: 28rpx;
+  border-radius: 8rpx;
+}
+
+/* 筛选栏样式 */
+.filter-bar {
+  display: flex;
+  gap: 10rpx;
+  margin-bottom: 20rpx;
+  background-color: white;
+  padding: 10rpx;
+  border-radius: 8rpx;
+}
+
+.filter-button {
+  flex: 1;
+  padding: 12rpx 0;
+  font-size: 28rpx;
+  border-radius: 6rpx;
+  background-color: #f1f1f1;
+  color: #666;
+}
+
+.filter-button.active {
+  background-color: #1677ff;
+  color: white;
+}
+
+/* 无记录样式 */
+.no-records {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100rpx 0;
+  color: #999;
+}
+
+.no-records-text {
+  font-size: 32rpx;
+  margin-top: 20rpx;
+}
+
+/* 记录列表样式 */
+.alarm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.alarm-item {
+  background-color: white;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.05);
+}
+
+.alarm-item.unhandled {
+  border-left: 6rpx solid #f53f3f;
+}
+
+.alarm-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.alarm-level {
+  display: inline-block;
+  padding: 4rpx 12rpx;
+  border-radius: 4rpx;
+  font-size: 26rpx;
+  font-weight: bold;
+  width: fit-content;
+}
+
+.alarm-level.warning {
+  background-color: #fff7e6;
+  color: #ff7d00;
+}
+
+.alarm-level.fire {
+  background-color: #ffe6e6;
+  color: #f53f3f;
+}
+
+.alarm-time {
+  font-size: 26rpx;
+  color: #999;
+}
+
+.alarm-desc {
+  font-size: 30rpx;
+  color: #333;
+  line-height: 1.5;
+}
+
+.alarm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12rpx;
+  margin-top: 8rpx;
+}
+
+.detail-button {
+  padding: 8rpx 20rpx;
+  font-size: 26rpx;
+  background-color: #f1f1f1;
+  color: #666;
+  border-radius: 6rpx;
+}
+
+.handle-button {
+  padding: 8rpx 20rpx;
+  font-size: 26rpx;
+  background-color: #07c160;
+  color: white;
+  border-radius: 6rpx;
+}
+
+.handled-text {
+  font-size: 26rpx;
+  color: #999;
+  padding: 8rpx 0;
+}
+    

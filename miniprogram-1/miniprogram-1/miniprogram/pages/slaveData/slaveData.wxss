@@ -1,0 +1,155 @@
+.container {
+  padding: 16rpx;
+  background-color: #f5f5f5;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* 头部样式 */
+.device-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: white;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05);
+}
+
+.device-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.device-name {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.online-status {
+  display: flex;
+  align-items: center;
+  margin-top: 8rpx;
+}
+
+.status-indicator {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  margin-right: 8rpx;
+}
+
+.online {
+  background-color: #07c160;
+}
+
+.offline {
+  background-color: #ff4d4f;
+}
+
+.status-text {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.overall-status {
+  padding: 12rpx 24rpx;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  font-weight: bold;
+}
+
+.normal {
+  background-color: #e6f7ff;
+  color: #0066cc;
+}
+
+.warning {
+  background-color: #fff7e6;
+  color: #cc9900;
+}
+
+.alarm {
+  background-color: #ffe6e6;
+  color: #cc0000;
+}
+
+/* 传感器卡片网格 */
+.sensor-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+  margin-bottom: 30rpx;
+}
+
+.sensor-card {
+  flex: 1 1 calc(50% - 10rpx);
+  background-color: white;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.sensor-card.normal { border-left: 8rpx solid #00b42a; }
+.sensor-card.warning { border-left: 8rpx solid #ff7d00; }
+.sensor-card.alarm { border-left: 8rpx solid #f53f3f; }
+
+.sensor-icon {
+  font-size: 60rpx;
+  margin-bottom: 16rpx;
+}
+
+.sensor-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sensor-name {
+  font-size: 32rpx;
+  color: #666;
+}
+
+.sensor-value {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.sensor-status {
+  font-size: 24rpx;
+  color: #ff4d4f;
+  margin-left: 10rpx;
+}
+
+.sensor-threshold {
+  font-size: 24rpx;
+  color: #999;
+}
+
+/* 刷新状态提示 */
+.refresh-status {
+  padding: 0 24rpx 20rpx;
+  font-size: 24rpx;
+  color: #666;
+  text-align: center;
+}
+
+/* 返回按钮 */
+.back-button-container {
+  padding: 0 16rpx;
+}
+
+.back-button {
+  width: 100%;
+  padding: 24rpx 0;
+  font-size: 32rpx;
+  border-radius: 16rpx;
+  background-color: #1677ff;
+  color: white;
+}

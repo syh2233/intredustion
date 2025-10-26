@@ -1,0 +1,74 @@
+<view class="chart-container">
+  <!-- 页面标题与筛选器 -->
+  <view class="page-header">
+    <text class="title">数据可视化分析</text>
+    <view class="filter-group">
+      <button 
+        class="filter-btn {{activeFilter === 'all' ? 'active' : ''}}"
+        bindtap="changeFilter"
+        data-type="all"
+      >
+        全部时间
+      </button>
+      <button 
+        class="filter-btn {{activeFilter === 'today' ? 'active' : ''}}"
+        bindtap="changeFilter"
+        data-type="today"
+      >
+        今日
+      </button>
+      <button 
+        class="filter-btn {{activeFilter === '7days' ? 'active' : ''}}"
+        bindtap="changeFilter"
+        data-type="7days"
+      >
+        近7天
+      </button>
+    </view>
+    <button class="refresh-btn" bindtap="refreshData">刷新数据</button>
+  </view>
+
+  <!-- 图表容器 -->
+  <view class="chart-grid" wx:if="{{hasData}}">
+    <!-- 温度图表 -->
+    <view class="chart-item">
+      <text class="chart-title">🌡️ 温度 (℃)</text>
+      <view class="chart-wrapper">
+        <ec-canvas id="tempChart" canvas-id="tempChart" ec="{{ec.temp}}"></ec-canvas>
+      </view>
+    </view>
+
+    <!-- 湿度图表 -->
+    <view class="chart-item">
+      <text class="chart-title">💧 湿度 (%)</text>
+      <view class="chart-wrapper">
+        <ec-canvas id="humidityChart" canvas-id="humidityChart" ec="{{ec.humidity}}"></ec-canvas>
+      </view>
+    </view>
+
+    <!-- 烟雾浓度图表 -->
+    <view class="chart-item">
+      <text class="chart-title">🔬 烟雾浓度 (ppm)</text>
+      <view class="chart-wrapper">
+        <ec-canvas id="smokeChart" canvas-id="smokeChart" ec="{{ec.smoke}}"></ec-canvas>
+      </view>
+    </view>
+
+    <!-- 声音图表 -->
+    <view class="chart-item">
+      <text class="chart-title">🔊 声音 (dB)</text>
+      <view class="chart-wrapper">
+        <ec-canvas id="soundChart" canvas-id="soundChart" ec="{{ec.sound}}"></ec-canvas>
+      </view>
+    </view>
+  </view>
+
+  <!-- 无数据提示 -->
+  <view class="no-data" wx:else>
+    <icon type="info" size="60" color="#ccc"></icon>
+    <text class="no-data-text">暂无符合条件的历史数据</text>
+  </view>
+
+  <!-- 返回按钮 -->
+  <button class="back-btn" bindtap="goBack">返回历史数据</button>
+</view>

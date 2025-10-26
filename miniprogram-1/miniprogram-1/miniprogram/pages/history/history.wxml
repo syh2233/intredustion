@@ -1,0 +1,70 @@
+<view class="history-container">
+  <view class="history-header">
+    <text class="header-title">主机历史数据记录</text>
+    <view class="header-info">
+      <text class="header-stats">共{{masterCount}}条记录</text>
+      <text class="header-description">只显示主机设备数据</text>
+    </view>
+    <view class="header-actions">
+      <button
+        class="visualize-button"
+        bindtap="goToChart"
+        wx:if="{{historyData.length > 0}}"
+      >
+        数据可视化
+      </button>
+      <button
+        class="clear-button"
+        bindtap="clearAllRecords"
+        wx:if="{{historyData.length > 0}}"
+      >
+        清除记录
+      </button>
+    </view>
+  </view>
+
+  <!-- 无记录状态 -->
+  <view class="no-records" wx:if="{{!hasData && !loading}}">
+    <icon type="info" size="60" color="#ccc"></icon>
+    <text class="no-records-text">暂无历史数据记录</text>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-container" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">正在加载历史数据...</text>
+  </view>
+
+  <!-- 数据记录列表 -->
+  <view class="history-list" wx:if="{{hasData}}">
+    <!-- 列表表头 -->
+    <view class="history-header-row">
+      <text class="history-cell time-header">时间</text>
+      <text class="history-cell">温度(℃)</text>
+      <text class="history-cell">湿度(%)</text>
+      <text class="history-cell">烟雾(ppm)</text>
+      <text class="history-cell">声音(dB)</text>
+      <text class="history-cell">火焰</text>
+    </view>
+
+    <!-- 列表内容 -->
+    <scroll-view scroll-y="true" style="height: calc(100vh - 220px);">
+      <view 
+        class="history-row {{index % 2 === 0 ? 'even-row' : 'odd-row'}}" 
+        wx:for="{{historyData}}" 
+        wx:key="id"
+      >
+        <text class="history-cell time-cell">{{item.time}}</text>
+        <text class="history-cell">{{item.temperature}}</text>
+        <text class="history-cell">{{item.humidity}}</text>
+        <text class="history-cell">{{item.smoke}}</text>
+        <text class="history-cell">{{item.sound}}</text>
+        <text class="history-cell">{{item.flame ? '检测到' : '未检测到'}}</text>
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 返回按钮 -->
+  <button class="back-button" bindtap="goBack">返回首页</button>
+</view>
+    

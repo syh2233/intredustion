@@ -1,0 +1,296 @@
+/* pages/light/light.wxss */
+.container {
+  padding: 20rpx;
+  background-color: #f5f5f5;
+  min-height: 100vh;
+}
+
+/* 状态栏 */
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  background: white;
+  padding: 30rpx;
+  border-radius: 16rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
+}
+
+.status-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.status-label {
+  font-size: 24rpx;
+  color: #666;
+  margin-bottom: 10rpx;
+}
+
+.status-value {
+  font-size: 28rpx;
+  font-weight: bold;
+}
+
+.status-value.online {
+  color: #07c160;
+}
+
+.status-value.offline {
+  color: #fa5151;
+}
+
+/* 光照卡片 */
+.light-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 24rpx;
+  padding: 40rpx;
+  margin-bottom: 30rpx;
+  color: white;
+  box-shadow: 0 8rpx 32rpx rgba(102, 126, 234, 0.3);
+}
+
+.light-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40rpx;
+}
+
+.light-title {
+  font-size: 32rpx;
+  font-weight: bold;
+}
+
+.refresh-btn {
+  padding: 10rpx;
+}
+
+.refresh-icon {
+  font-size: 32rpx;
+  transition: transform 0.3s ease;
+}
+
+.refresh-icon.rotating {
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.light-display {
+  text-align: center;
+  margin-bottom: 40rpx;
+}
+
+.light-value-wrapper {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  margin-bottom: 20rpx;
+}
+
+.light-value {
+  font-size: 120rpx;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.light-unit {
+  font-size: 36rpx;
+  margin-left: 16rpx;
+  opacity: 0.8;
+}
+
+.light-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16rpx 32rpx;
+  border-radius: 50rpx;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10rpx);
+}
+
+.status-icon {
+  font-size: 32rpx;
+  margin-right: 12rpx;
+}
+
+.status-text {
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.light-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.level-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12rpx 0;
+}
+
+.level-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  margin-right: 20rpx;
+}
+
+.level-label {
+  flex: 1;
+  font-size: 26rpx;
+}
+
+.level-value {
+  font-size: 24rpx;
+  opacity: 0.8;
+  font-family: monospace;
+}
+
+/* 控制面板 */
+.control-panel {
+  background: white;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
+}
+
+.control-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.control-item:last-child {
+  border-bottom: none;
+}
+
+.control-header {
+  flex: 1;
+}
+
+.control-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.control-desc {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.control-btn {
+  background: #1677ff;
+  color: white;
+  border: none;
+  border-radius: 8rpx;
+  padding: 16rpx 32rpx;
+  font-size: 26rpx;
+}
+
+.control-switch {
+  transform: scale(0.8);
+}
+
+/* 图表区域 */
+.chart-section {
+  background: white;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
+}
+
+.chart-header {
+  margin-bottom: 30rpx;
+}
+
+.chart-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.chart-subtitle {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.chart-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20rpx 0;
+}
+
+.light-chart {
+  border-radius: 8rpx;
+  background: #fafafa;
+}
+
+/* 操作按钮 */
+.action-buttons {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 40rpx;
+}
+
+.action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30rpx;
+  border-radius: 16rpx;
+  font-size: 30rpx;
+  font-weight: bold;
+  border: none;
+}
+
+.action-btn.primary {
+  background: linear-gradient(135deg, #1677ff, #0958d9);
+  color: white;
+}
+
+.action-btn.secondary {
+  background: white;
+  color: #666;
+  border: 2rpx solid #e0e0e0;
+}
+
+.btn-icon {
+  font-size: 32rpx;
+  margin-right: 12rpx;
+}
+
+/* 响应式调整 */
+@media (max-width: 750rpx) {
+  .light-value {
+    font-size: 100rpx;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+  }
+
+  .light-levels {
+    gap: 8rpx;
+  }
+}

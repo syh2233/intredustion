@@ -1,0 +1,167 @@
+.settings-container {
+  padding: 16rpx;
+  background-color: #f5f5f5;
+  min-height: 100vh;
+}
+
+.settings-header {
+  background-color: white;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 16rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05);
+}
+
+.header-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+  display: block;
+}
+
+.header-desc {
+  font-size: 28rpx;
+  color: #666;
+  margin-top: 8rpx;
+  display: block;
+}
+
+.settings-content {
+  background-color: white;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05);
+}
+
+.setting-item {
+  margin-bottom: 40rpx;
+  padding-bottom: 30rpx;
+  border-bottom: 1px solid #f1f1f1;
+}
+
+.setting-item:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.setting-label {
+  margin-bottom: 20rpx;
+}
+
+.label-text {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.label-desc {
+  font-size: 26rpx;
+  color: #666;
+  display: block;
+  margin-top: 8rpx;
+}
+
+.setting-control {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+slider {
+  width: 100%;
+}
+
+.input-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  margin-top: 10rpx;
+}
+
+.threshold-input {
+  width: 160rpx;
+  height: 60rpx;
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+  padding: 0 16rpx;
+  font-size: 30rpx;
+  text-align: center;
+}
+
+.unit {
+  font-size: 30rpx;
+  color: #666;
+}
+
+.range-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 24rpx;
+  color: #999;
+  margin-top: 10rpx;
+}
+
+/* 固定阈值说明 */
+.fixed-thresholds {
+  margin-top: 40rpx;
+  padding-top: 30rpx;
+  border-top: 1px dashed #eee;
+}
+
+.fixed-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.fixed-item {
+  display: flex;
+  margin-bottom: 16rpx;
+}
+
+.fixed-label {
+  font-size: 28rpx;
+  color: #666;
+  width: 200rpx;
+}
+
+.fixed-value {
+  font-size: 28rpx;
+  color: #333;
+  flex: 1;
+}
+
+/* 操作按钮 */
+.settings-actions {
+  display: flex;
+  gap: 16rpx;
+  padding: 0 16rpx;
+}
+
+.reset-button, .save-button {
+  flex: 1;
+  padding: 24rpx 0;
+  font-size: 32rpx;
+  border-radius: 16rpx;
+}
+
+.reset-button {
+  background-color: #f1f1f1;
+  color: #666;
+}
+
+.save-button {
+  background-color: #1677ff;
+  color: white;
+}
+.setting-control {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  padding-right: 80rpx; /* 新增左侧内边距，使滑动条左移 */
+}

@@ -1,0 +1,54 @@
+<view class="container">
+  <!-- 从机设备状态头部 -->
+  <view class="device-header">
+    <view class="device-info">
+      <text class="device-name">从机设备监控</text>
+      <view class="online-status">
+        <view class="status-indicator {{isOnline ? 'online' : 'offline'}}"></view>
+        <text class="status-text">{{isOnline ? '设备在线' : '设备离线'}}</text>
+      </view>
+    </view>
+    <view class="overall-status {{overallStatus}}">
+      <text>{{overallStatus === 'normal' ? '正常' : overallStatus === 'warning' ? '预警' : '火警'}}</text>
+    </view>
+  </view>
+
+  <!-- 从机传感器数据卡片 -->
+  <view class="sensor-grid">
+    <!-- 烟雾浓度卡片 -->
+    <view class="sensor-card {{smokeStatus}}">
+      <view class="sensor-icon">🔬</view>
+      <view class="sensor-info">
+        <text class="sensor-name">烟雾浓度</text>
+        <text class="sensor-value">{{smoke}}</text>
+        <text class="sensor-status" wx:if="{{!isOnline}}">离线</text>
+      </view>
+      <view class="sensor-threshold">
+        <text>{{smoke < 1000 ? '⚠️ 报警' : smoke < 1300 ? '⚡ 预警' : '✅ 正常'}}</text>
+      </view>
+    </view>
+
+    <!-- 火焰卡片 -->
+    <view class="sensor-card {{flame ? 'alarm' : 'normal'}}">
+      <view class="sensor-icon">🔥</view>
+      <view class="sensor-info">
+        <text class="sensor-name">火焰</text>
+        <text class="sensor-value">{{flame ? '检测到火焰!' : '安全'}}</text>
+        <text class="sensor-status" wx:if="{{!isOnline}}">离线</text>
+      </view>
+      <view class="sensor-threshold">
+        <text>{{flame ? '⚠️ 危险' : '✅ 正常'}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 数据刷新状态提示 -->
+  <view class="refresh-status">
+    <text>{{result}}</text>
+  </view>
+
+  <!-- 返回按钮 -->
+  <view class="back-button-container">
+    <button class="back-button" bindtap="goBack">返回主机页面</button>
+  </view>
+</view>

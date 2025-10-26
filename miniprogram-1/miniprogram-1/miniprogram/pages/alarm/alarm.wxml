@@ -1,0 +1,91 @@
+<view class="alarm-container">
+  <!-- 加载状态 -->
+  <view class="loading-container" wx:if="{{loading}}">
+    <text class="loading-text">正在加载报警记录...</text>
+  </view>
+
+  <!-- 主要内容 -->
+  <view wx:else>
+    <view class="alarm-header">
+      <text class="header-title">报警记录</text>
+      <button
+        class="clear-button"
+        bindtap="clearAllRecords"
+        wx:if="{{alarmRecords.length > 0}}"
+      >
+        清除全部
+      </button>
+    </view>
+
+  <!-- 筛选器 -->
+  <view class="filter-bar" wx:if="{{alarmRecords.length > 0}}">
+    <button 
+      class="filter-button {{filterType === 'all' ? 'active' : ''}}"
+      bindtap="changeFilterType"
+      data-type="all"
+    >
+      全部
+    </button>
+    <button 
+      class="filter-button {{filterType === 'unhandled' ? 'active' : ''}}"
+      bindtap="changeFilterType"
+      data-type="unhandled"
+    >
+      未处理
+    </button>
+    <button 
+      class="filter-button {{filterType === 'handled' ? 'active' : ''}}"
+      bindtap="changeFilterType"
+      data-type="handled"
+    >
+      已处理
+    </button>
+  </view>
+
+  <!-- 无记录状态 -->
+  <view class="no-records" wx:if="{{noRecords}}">
+    <icon type="info" size="60" color="#ccc"></icon>
+    <text class="no-records-text">暂无报警记录</text>
+  </view>
+
+  <!-- 报警记录列表 -->
+  <view class="alarm-list" wx:else>
+    <view 
+      class="alarm-item {{!item.handled ? 'unhandled' : ''}}" 
+      wx:for="{{filteredRecords}}" 
+      wx:key="id"
+    >
+      <view class="alarm-info">
+        <view class="alarm-level {{item.level === '火警' ? 'fire' : 'warning'}}">
+          {{item.level}}
+        </view>
+        <view class="alarm-time">
+          {{item.time}}
+        </view>
+        <view class="alarm-desc">
+          {{item.description}}
+        </view>
+      </view>
+      <view class="alarm-actions">
+        <button 
+          class="detail-button" 
+          bindtap="viewAlarmDetails"
+          data-id="{{item.id}}"
+        >
+          详情
+        </button>
+        <button 
+          class="handle-button" 
+          bindtap="markAsHandled"
+          data-id="{{item.id}}"
+          wx:if="{{!item.handled}}"
+        >
+          标记已处理
+        </button>
+        <text class="handled-text" wx:if="{{item.handled}}">已处理</text>
+      </view>
+    </view>
+  </view>
+  </view>
+</view>
+    
