@@ -24,19 +24,19 @@ document.addEventListener('DOMContentLoaded', function() {
 // 初始化应用
 function initializeApp() {
     console.log('初始化ESP32火灾报警系统...');
-    
+
     // 初始化Socket.IO连接
     initializeSocket();
-    
+
     // 初始化图表
     initializeChart();
-    
+
     // 加载初始数据
     loadInitialData();
-    
+
     // 设置事件监听器
     setupEventListeners();
-    
+
     // 启动定时器
     startTimers();
 }
@@ -123,7 +123,7 @@ function setupEventListeners() {
             stopAlarmSound();
         }
     });
-    
+
     // 添加设备卡片点击事件
     document.addEventListener('click', function(e) {
         if (e.target.closest('.device-card')) {
@@ -131,13 +131,13 @@ function setupEventListeners() {
             showDeviceDetails(deviceId);
         }
     });
-    
+
     // 图表控制按钮事件
     document.querySelectorAll('.chart-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const chartType = this.dataset.chart;
             updateChartView(chartType);
-            
+
             // 更新按钮状态
             document.querySelectorAll('.chart-btn').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
@@ -180,9 +180,22 @@ function refreshDevices() {
 function updateDevices(deviceData) {
     const container = document.getElementById('devices-container');
     if (!container) return;
-    
+
     container.innerHTML = '';
-    
+
+    // 如果没有设备，显示提示信息
+    if (!deviceData || deviceData.length === 0) {
+        container.innerHTML = `
+            <div class="no-devices-message">
+                <i class="fas fa-microchip"></i>
+                <h3>暂无设备数据</h3>
+                <p>请确保 ESP32 设备已连接并正常发送数据</p>
+                <p class="text-muted">MQTT Broker: 2.tcp.vip.cpolar.cn:14357</p>
+            </div>
+        `;
+        return;
+    }
+
     deviceData.forEach(device => {
         devices[device.device_id] = device;
         const deviceCard = createDeviceCard(device);
@@ -195,10 +208,10 @@ function createDeviceCard(device) {
     const card = document.createElement('div');
     card.className = `device-card ${device.status.toLowerCase()}`;
     card.dataset.deviceId = device.device_id;
-    
+
     const statusIcon = getStatusIcon(device.status);
     const lastUpdate = formatTime(device.last_update);
-    
+
     card.innerHTML = `
         <div class="device-header">
             <div class="device-id">${device.device_id}</div>
@@ -233,7 +246,7 @@ function createDeviceCard(device) {
             <small data-timestamp="${device.last_update}">最后更新: ${lastUpdate}</small>
         </div>
     `;
-    
+
     return card;
 }
 
@@ -254,11 +267,11 @@ function updateStatusOverview(deviceData) {
         warning: 0,
         alarm: 0
     };
-    
+
     deviceData.forEach(device => {
         const status = device.status;
         console.log(`设备 ${device.device_id} 状态: ${status}`);
-        
+
         // 处理中文状态映射，不使用toLowerCase()
         if (status === '正常' || status === 'normal') {
             statusCounts.normal++;
@@ -273,16 +286,16 @@ function updateStatusOverview(deviceData) {
             console.log(`未知状态: ${status}`);
         }
     });
-    
+
     // 更新显示
     const normalCount = document.getElementById('normal-count');
     const warningCount = document.getElementById('warning-count');
     const alarmCount = document.getElementById('alarm-count');
-    
+
     if (normalCount) normalCount.textContent = statusCounts.normal;
     if (warningCount) warningCount.textContent = statusCounts.warning;
     if (alarmCount) alarmCount.textContent = statusCounts.alarm;
-    
+
     // 如果有警报，添加视觉提示
     if (statusCounts.alarm > 0) {
         document.body.classList.add('alarm-active');
@@ -294,21 +307,21 @@ function updateStatusOverview(deviceData) {
 // 处理报警
 function handleAlarm(alarmData) {
     console.log('收到报警:', alarmData);
-    
+
     // 添加到报警历史
     alarmHistory.unshift(alarmData);
     updateAlarmHistory(alarmHistory);
-    
+
     // 播放报警声音
     playAlarmSound();
-    
+
     // 显示报警通知
     showNotification(
         '火灾警报！',
         `${alarmData.location} 检测到火灾风险！`,
         'alarm'
     );
-    
+
     // 浏览器通知（如果用户允许）
     showBrowserNotification('火灾警报', alarmData.message);
 }
@@ -317,17 +330,17 @@ function handleAlarm(alarmData) {
 function updateAlarmHistory(history) {
     const container = document.getElementById('alarm-container');
     if (!container) return;
-    
+
     container.innerHTML = '';
-    
+
     if (history.length === 0) {
         container.innerHTML = '<div class="no-data">暂无报警记录</div>';
         return;
     }
-    
+
     // 只显示最近20条记录
     const recentHistory = history.slice(0, 20);
-    
+
     recentHistory.forEach(alarm => {
         const alarmElement = createAlarmElement(alarm);
         container.appendChild(alarmElement);
@@ -338,9 +351,9 @@ function updateAlarmHistory(history) {
 function createAlarmElement(alarm) {
     const element = document.createElement('div');
     element.className = 'alarm-item';
-    
+
     const time = formatTime(alarm.timestamp);
-    
+
     element.innerHTML = `
         <div class="alarm-header">
             <div class="alarm-title">
@@ -355,7 +368,7 @@ function createAlarmElement(alarm) {
             <span><i class="fas fa-map-marker-alt"></i> ${alarm.location}</span>
         </div>
     `;
-    
+
     return element;
 }
 
@@ -393,10 +406,10 @@ function showNotification(title, message, type = 'info') {
         </div>
         <div class="notification-message">${message}</div>
     `;
-    
+
     // 添加到页面
     document.body.appendChild(notification);
-    
+
     // 自动移除
     setTimeout(() => {
         if (notification.parentElement) {
@@ -427,7 +440,7 @@ function showBrowserNotification(title, message) {
 function showDeviceDetails(deviceId) {
     const device = devices[deviceId];
     if (!device) return;
-    
+
     // 创建模态框显示详细信息
     const modal = document.createElement('div');
     modal.className = 'modal';
@@ -467,9 +480,9 @@ function showDeviceDetails(deviceId) {
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
-    
+
     // 点击背景关闭
     modal.addEventListener('click', function(e) {
         if (e.target === modal) {
@@ -485,21 +498,21 @@ function initializeChart() {
         console.error('找不到图表容器元素');
         return;
     }
-    
+
     // 初始化为0值数据，等待真实传感器数据
     if (sensorData.labels.length === 0) {
+        // 不再预先填充假数据，等待真实数据到来
+        console.log('等待真实设备数据...');
+        // 添加一个初始时间标签
         const now = new Date();
-        for (let i = 9; i >= 0; i--) {
-            const time = new Date(now.getTime() - i * 5000);
-            sensorData.labels.push(time.toLocaleTimeString('zh-CN'));
-            sensorData.temperature.push(0); // 无数据时显示0
-            sensorData.humidity.push(0);    // 无数据时显示0
-            sensorData.smoke.push(0);       // 无数据时显示0
-            sensorData.flame.push(0);       // 无数据时显示0
-            sensorData.light.push(0);       // 无数据时显示0
-        }
+        sensorData.labels.push(now.toLocaleTimeString('zh-CN'));
+        sensorData.temperature.push(null);
+        sensorData.humidity.push(null);
+        sensorData.smoke.push(null);
+        sensorData.flame.push(null);
+        sensorData.light.push(null);
     }
-    
+
     try {
         realtimeChart = new Chart(ctx, {
         type: 'line',
@@ -599,10 +612,10 @@ function initializeChart() {
             }
         }
         });
-        
+
         // 初始化为综合视图（标准化数据）
         normalizeDataForCombinedView();
-        
+
         console.log('图表初始化成功');
     } catch (error) {
         console.error('图表初始化失败:', error);
@@ -612,9 +625,9 @@ function initializeChart() {
 // 更新图表视图
 function updateChartView(chartType) {
     if (!realtimeChart) return;
-    
+
     const datasets = realtimeChart.data.datasets;
-    
+
     switch(chartType) {
         case 'temperature':
             restoreOriginalData();
@@ -694,24 +707,24 @@ function updateChartView(chartType) {
             realtimeChart.options.plugins.title.text = '火灾风险实时监控 - 综合视图';
             realtimeChart.options.scales.y.title.text = '风险程度 (%)';
             realtimeChart.options.scales.y.max = 100;
-            
+
             // 在综合视图中标准化烟雾和火焰数据到0-100范围
             normalizeDataForCombinedView();
             break;
     }
-    
+
     realtimeChart.update();
 }
 
 // 标准化数据用于综合视图
 function normalizeDataForCombinedView() {
     if (!realtimeChart) return;
-    
+
     const datasets = realtimeChart.data.datasets;
-    
+
     // 调试：输出原始数据
     console.log('标准化前的原始温度数据:', sensorData.temperature.slice(-5));
-    
+
     // 温度: 0-60°C -> 0-100%
     datasets[0].data = sensorData.temperature.map(temp => {
         // 确保温度是有效数字
@@ -720,7 +733,7 @@ function normalizeDataForCombinedView() {
         return Math.round(norm);
     });
     datasets[0].label = '温度 (%)';
-    
+
     // 烟雾: 0-200 -> 0-100% (烟雾值通常不会太高)
     datasets[1].data = sensorData.smoke.map(smoke => {
         const validSmoke = typeof smoke === 'number' && !isNaN(smoke) ? smoke : 0;
@@ -728,7 +741,7 @@ function normalizeDataForCombinedView() {
         return Math.round(norm);
     });
     datasets[1].label = '烟雾 (%)';
-    
+
     // 火焰: 反向映射, 800-1500 -> 100-0% (值越低风险越高)
     datasets[2].data = sensorData.flame.map(flame => {
         const validFlame = typeof flame === 'number' && !isNaN(flame) ? flame : 0;
@@ -737,22 +750,22 @@ function normalizeDataForCombinedView() {
         return Math.round(risk);
     });
     datasets[2].label = '火焰风险 (%)';
-    
+
     console.log('标准化后的温度百分比:', datasets[0].data.slice(-5));
 }
 
 // 恢复原始数据用于单独视图
 function restoreOriginalData() {
     if (!realtimeChart) return;
-    
+
     const datasets = realtimeChart.data.datasets;
-    
+
     datasets[0].data = [...sensorData.temperature];
     datasets[0].label = '温度 (°C)';
-    
+
     datasets[1].data = [...sensorData.smoke];
     datasets[1].label = '烟雾水平';
-    
+
     datasets[2].data = [...sensorData.flame];
     datasets[2].label = '火焰值';
 }
@@ -760,20 +773,20 @@ function restoreOriginalData() {
 // 用新数据更新图表
 function updateChartWithNewData(deviceData) {
     if (!realtimeChart) return;
-    
+
     const now = new Date();
     const timeLabel = now.toLocaleTimeString('zh-CN');
-    
+
     let avgTemp = 0, avgHumidity = 0, avgSmoke = 0, avgFlame = 0, avgLight = 0;
     let validDevices = 0;
-    
+
     // 调试：输出接收到的设备数据
     console.log('接收到设备数据:', deviceData);
-    
+
     // 只有在有真实设备数据时才计算平均值
     if (deviceData && deviceData.length > 0) {
         deviceData.forEach(device => {
-            if (device && typeof device.temperature === 'number' && 
+            if (device && typeof device.temperature === 'number' &&
                 typeof device.smoke_level === 'number') {
                 avgTemp += device.temperature;
                 avgHumidity += device.humidity || 0;
@@ -784,7 +797,7 @@ function updateChartWithNewData(deviceData) {
                 console.log(`设备 ${device.device_id}: 温度=${device.temperature}, 湿度=${device.humidity || 0}, 烟雾=${device.smoke_level}, 火焰=${device.flame || 0}, 光照=${device.light_level || 0}`);
             }
         });
-        
+
         if (validDevices > 0) {
             avgTemp /= validDevices;
             avgHumidity /= validDevices;
@@ -793,7 +806,7 @@ function updateChartWithNewData(deviceData) {
             avgLight /= validDevices;
         }
     }
-    
+
     // 如果没有有效数据，使用0值
     if (validDevices === 0) {
         avgTemp = 0;
@@ -801,9 +814,9 @@ function updateChartWithNewData(deviceData) {
         avgFlame = 0;
         console.log('无传感器数据，显示0值');
     }
-    
+
     console.log(`计算平均值: 温度=${avgTemp.toFixed(1)}, 烟雾=${avgSmoke.toFixed(0)}, 火焰=${avgFlame.toFixed(0)}`);
-    
+
     // 添加新数据点
     sensorData.labels.push(timeLabel);
     sensorData.temperature.push(Number(avgTemp.toFixed(1)));
@@ -811,7 +824,7 @@ function updateChartWithNewData(deviceData) {
     sensorData.smoke.push(Number(avgSmoke.toFixed(0)));
     sensorData.flame.push(Number(avgFlame.toFixed(0)));
     sensorData.light.push(Number(avgLight.toFixed(0)));
-    
+
     // 保持数据点数量限制
     if (sensorData.labels.length > MAX_DATA_POINTS) {
         sensorData.labels.shift();
@@ -821,7 +834,7 @@ function updateChartWithNewData(deviceData) {
         sensorData.flame.shift();
         sensorData.light.shift();
     }
-    
+
     // 更新图表
     try {
         // 检查当前是否为综合视图，如果是则需要重新标准化数据
@@ -829,7 +842,7 @@ function updateChartWithNewData(deviceData) {
         if (activeChartBtn && activeChartBtn.dataset.chart === 'combined') {
             normalizeDataForCombinedView();
         }
-        
+
         realtimeChart.update('none');
     } catch (error) {
         console.error('图表更新失败:', error);
@@ -916,13 +929,13 @@ function formatTime(timestamp) {
     } else { // 毫秒级时间戳
         dateMs = timestamp;
     }
-    
+
     // 创建本地日期对象（JavaScript会自动转换为本地时区）
     const localDate = new Date(dateMs);
-    
+
     const now = new Date();
     const diff = now - localDate;
-    
+
     if (diff < 60000) { // 1分钟内
         return '刚刚';
     } else if (diff < 3600000) { // 1小时内
@@ -1131,7 +1144,7 @@ function refreshDevices() {
 // 显示特定状态的设备
 function showStatusDevices(status) {
     console.log(`显示状态为 ${status} 的设备`);
-    
+
     // 获取所有设备数据
     fetch('/api/devices')
         .then(response => response.json())
@@ -1148,9 +1161,9 @@ function showStatusDevices(status) {
                 }
                 return false;
             });
-            
+
             console.log(`找到 ${filteredDevices.length} 个${getStatusName(status)}设备`);
-            
+
             // 显示模态框
             showStatusDevicesModal(status, filteredDevices);
         })
@@ -1175,14 +1188,14 @@ function showStatusDevicesModal(status, devices) {
     const modal = document.getElementById('status-devices-modal');
     const modalTitle = document.getElementById('modal-title');
     const container = document.getElementById('status-devices-container');
-    
+
     // 设置标题
     const statusName = getStatusName(status);
     modalTitle.textContent = `${statusName}设备 (${devices.length}台)`;
-    
+
     // 清空容器
     container.innerHTML = '';
-    
+
     if (devices.length === 0) {
         container.innerHTML = '<div class="no-data">暂无' + statusName + '设备</div>';
     } else {
@@ -1192,17 +1205,17 @@ function showStatusDevicesModal(status, devices) {
             container.appendChild(deviceCard);
         });
     }
-    
+
     // 显示模态框
     modal.style.display = 'block';
-    
+
     // 点击模态框外部关闭
     window.onclick = function(event) {
         if (event.target === modal) {
             closeStatusDevicesModal();
         }
     };
-    
+
     // ESC键关闭模态框
     document.addEventListener('keydown', function escKeyHandler(event) {
         if (event.key === 'Escape') {
@@ -1216,10 +1229,10 @@ function showStatusDevicesModal(status, devices) {
 function createDeviceCard(device) {
     const card = document.createElement('div');
     card.className = `device-card ${device.status}`;
-    
+
     const statusIcon = getStatusIcon(device.status);
     const lastUpdate = formatTime(device.last_update);
-    
+
     card.innerHTML = `
         <div class="device-header">
             <div class="device-id">${device.device_id}</div>
@@ -1252,7 +1265,7 @@ function createDeviceCard(device) {
             <small>最后更新: ${lastUpdate}</small>
         </div>
     `;
-    
+
     return card;
 }
 
@@ -1260,7 +1273,7 @@ function createDeviceCard(device) {
 function closeStatusDevicesModal() {
     const modal = document.getElementById('status-devices-modal');
     modal.style.display = 'none';
-    
+
     // 移除事件监听器
     window.onclick = null;
 }
@@ -1522,4 +1535,3 @@ function handleSlaveAlarm(slaveData) {
         'alarm'
     );
 }
-

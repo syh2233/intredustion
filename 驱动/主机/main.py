@@ -67,9 +67,9 @@ MQTT_PORT = 11390
 
 # GPIO配置（用户指定接口）
 dht_sensor = dht.DHT11(Pin(4))
-FLAME_DO_PIN = 14  # 火焰传感器数字输入（0=有火，1=无火）
+FLAME_DO_PIN = 35  # 火焰传感器数字输入（0=有火，1=无火）
 MQ2_AO_PIN = 34   # MQ2烟雾传感器模拟输入
-MQ2_DO_PIN = 2    # MQ2烟雾传感器数字输入
+MQ2_DO_PIN = 12    # MQ2烟雾传感器数字输入
 SOUND_AO_PIN = 13 # 声音传感器模拟输入
 SOUND_DO_PIN = 35 # 声音传感器数字输入
 SERVO_PIN = 15    # 舵机控制
@@ -690,24 +690,24 @@ flame_backup_pin = 27  # 备用引脚
 flame_using_backup = False
 
 def read_flame():
-    """读取火焰传感器 - 数字模式"""
+    """读取火焰传感器 - 数字模式 (修正版)"""
     try:
-        # 读取数字值
+        # 1. 读取数字值 (硬件上: 0=有火, 1=无火)
         digital_value = flame_do.value()
 
-        # 数字值：0=检测到火焰，1=正常
+        # 2. 转换逻辑：为了兼容报警判断
         if digital_value == 0:  # 检测到火焰
-            print(f"🔥 火焰传感器: 检测到火焰!")
-            analog_value = 0  # 用于显示的模拟值
-        else:  # 正常状态
-            print(f"✅ 火焰传感器: 正常")
-            analog_value = 1500  # 用于显示的模拟值，设置为高值避免误报警
+            print("🔥 火焰传感器: 检测到火焰!")
+            analog_value = 0    # 模拟低电压，触发报警 (< 500)
+        else:                   # 正常
+            # print("✅ 火焰传感器: 正常")
+            analog_value = 4095 # 模拟高电压，表示安全
 
         return analog_value, digital_value
 
     except Exception as e:
         print(f"❌ 火焰传感器读取错误: {e}")
-        return 1, 1  # 默认返回正常状态
+        return 4095, 1  # 出错时默认返回正常状态 (4095, 1)
 
 def read_mq2():
     """读取MQ2烟雾传感器"""
@@ -808,38 +808,44 @@ def check_fire_alarm(flame_analog, mq2_analog, temperature, light_level):
     if flame_analog is None and mq2_analog is None and temperature is None and light_level is None:
         return "normal"
 
-    # 警报条件（任一满足即触发）
-    # 火焰传感器值低表示检测到火焰（通常<500，降低误报）
-    # MQ2烟雾传感器值低表示烟雾浓度高
     alarm_condition = False
 
-    # 检查火焰传感器（如果未故障）
+    # 1. 火焰传感器 (保持现状)
+    # 你的代码里 read_flame 返回的 flame_analog 是假的 (0 或 1500)，是基于 DO 判断的
+    # 所以这里用 < 500 是没问题的 (因为有火时你返回了0)
     if not FLAME_SENSOR_FAILED and flame_analog is not None and flame_analog < 500:
         alarm_condition = True
         print(f"🔥 火焰警报: flame_analog={flame_analog}")
-    elif mq2_analog is not None and mq2_analog < 1000:
+    
+    # 2. 【重点修改】MQ2烟雾传感器 (改为大于号)
+    # 假设阈值：报警 > 2500
+    elif mq2_analog is not None and mq2_analog > 3000:
         alarm_condition = True
         print(f"💨 烟雾警报: mq2_analog={mq2_analog}")
+        
     elif temperature is not None and temperature > 40:
         alarm_condition = True
         print(f"🌡️ 温度警报: temperature={temperature}")
-    elif light_level is not None and light_level > 120:
+    elif light_level is not None and light_level > 120: # 这里的逻辑可能也需要确认，火光会让光照变大？
         alarm_condition = True
         print(f"💡 光照警报: light_level={light_level}")
 
     if alarm_condition:
         return "alarm"
 
-    # 警告条件（任一满足即触发）
+    # 警告条件
     warning_condition = False
 
-    # 检查火焰传感器（如果未故障）
-    if not FLAME_SENSOR_FAILED and flame_analog is not None and flame_analog < 1000:
+    if not FLAME_SENSOR_FAILED and flame_analog is not None and flame_analog < 3000:
         warning_condition = True
         print(f"🔥 火焰警告: flame_analog={flame_analog}")
-    elif mq2_analog is not None and mq2_analog < 1200:
+        
+    # 【重点修改】MQ2警告阈值 (改为大于号)
+    # 假设阈值：警告 > 1500 (比正常空气稍高)
+    elif mq2_analog is not None and mq2_analog > 2500:
         warning_condition = True
         print(f"💨 烟雾警告: mq2_analog={mq2_analog}")
+        
     elif temperature is not None and temperature > 35:
         warning_condition = True
         print(f"🌡️ 温度警告: temperature={temperature}")
@@ -957,7 +963,7 @@ class SystemStatus:
             danger_reason = "火焰警报"
 
         # 检查烟雾
-        elif mq2_analog is not None and mq2_analog < 1000:
+        elif mq2_analog is not None and mq2_analog < 600:
             danger_detected = True
             danger_reason = "烟雾警报"
 
@@ -1350,3 +1356,4 @@ if __name__ == "__main__":
             mqtt_client.publish(f"esp32/{DEVICE_ID}/status/online", "0")
             mqtt_client.disconnect()
         print("系统已安全关闭")
+

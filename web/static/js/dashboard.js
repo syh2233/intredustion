@@ -1,602 +1,580 @@
-// ESP32宿舍火灾报警系统 - 仪表板页面JavaScript
+// ESP32宿舍火灾报警系统 - 历史数据中心JavaScript
 
 // 全局变量
-let socket;
-let devices = {};
-let charts = {};
-let historicalData = {
-    temperature: [],
-    smoke: [],
-    timestamps: []
-};
+let currentHistoryData = null;
+let availableDevices = [];
+let currentPage = 1;
+let recordsPerPage = 100;
+let totalRecords = 0;
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
-    initializeDashboard();
+    initializeHistoryDashboard();
 });
 
-// 初始化仪表板
-function initializeDashboard() {
-    console.log('初始化ESP32火灾报警系统仪表板...');
-    
-    // 初始化Socket.IO连接
-    initializeSocket();
-    
-    // 初始化图表
-    initializeCharts();
-    
-    // 加载初始数据
-    loadInitialData();
-    
+// 初始化历史数据仪表板
+function initializeHistoryDashboard() {
+    console.log('初始化ESP32火灾报警系统历史数据仪表板...');
+
+    // 加载可用设备列表
+    loadAvailableDevices();
+
     // 设置事件监听器
     setupEventListeners();
-    
-    // 启动定时器
-    startTimers();
+
+    // 加载初始数据
+    loadHistoryData();
+
+    // 设置自动刷新（每5分钟）
+    setInterval(autoRefresh, 300000);
 }
 
-// 初始化Socket.IO连接
-function initializeSocket() {
-    socket = io();
-    
-    // 连接成功
-    socket.on('connected', function(data) {
-        console.log('仪表板Socket.IO连接成功:', data);
-        showNotification('连接成功', '仪表板已连接到火灾报警系统', 'success');
-    });
-    
-    // 接收设备状态更新
-    socket.on('devices_update', function(deviceData) {
-        updateDevices(deviceData);
-        updateCharts(deviceData);
-        updateStatistics(deviceData);
-    });
-    
-    // 接收报警信息
-    socket.on('alarm', function(alarmData) {
-        handleAlarm(alarmData);
-    });
-    
-    // 连接错误
-    socket.on('connect_error', function(error) {
-        console.error('Socket.IO连接错误:', error);
-        showNotification('连接错误', '无法连接到服务器', 'error');
-    });
-}
 
-// 初始化图表
-function initializeCharts() {
-    // 温度趋势图
-    const tempCtx = document.getElementById('temperature-chart');
-    if (tempCtx) {
-        charts.temperature = new Chart(tempCtx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: '温度 (°C)',
-                    data: [],
-                    borderColor: '#F44336',
-                    backgroundColor: 'rgba(244, 67, 54, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: false,
-                        min: 15,
-                        max: 50
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top'
-                    }
-                }
-            }
-        });
-    }
-    
-    // 烟雾水平图
-    const smokeCtx = document.getElementById('smoke-chart');
-    if (smokeCtx) {
-        charts.smoke = new Chart(smokeCtx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: '烟雾水平',
-                    data: [],
-                    borderColor: '#FF9800',
-                    backgroundColor: 'rgba(255, 152, 0, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        min: 0,
-                        max: 600
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top'
-                    }
-                }
-            }
-        });
-    }
-    
-    // 设备状态饼图
-    const statusCtx = document.getElementById('status-chart');
-    if (statusCtx) {
-        charts.status = new Chart(statusCtx, {
-            type: 'doughnut',
-            data: {
-                labels: ['正常', '警告', '警报'],
-                datasets: [{
-                    data: [0, 0, 0],
-                    backgroundColor: [
-                        '#4CAF50',
-                        '#FF9800',
-                        '#F44336'
-                    ],
-                    borderWidth: 2,
-                    borderColor: '#fff'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
-                    }
-                }
-            }
-        });
-    }
-}
-
-// 加载初始数据
-function loadInitialData() {
-    // 通过API获取初始设备数据
-    fetch('/api/devices')
+// 加载可用设备列表
+function loadAvailableDevices() {
+    fetch('/api/devices/all')
         .then(response => response.json())
-        .then(data => {
-            updateDevices(data);
-            updateCharts(data);
-            updateStatistics(data);
+        .then(devices => {
+            availableDevices = devices;
+            updateDeviceSelect(devices);
         })
         .catch(error => {
-            console.error('加载设备数据失败:', error);
-            showNotification('加载失败', '无法加载设备数据', 'error');
+            console.error('加载设备列表失败:', error);
+            showNotification('加载失败', '无法加载设备列表', 'error');
         });
-    
-    // 加载报警历史
-    fetch('/api/history')
-        .then(response => response.json())
-        .then(data => {
-            updateTodayAlarmsCount(data);
-        })
-        .catch(error => {
-            console.error('加载报警历史失败:', error);
-        });
+}
+
+// 更新设备选择下拉框
+function updateDeviceSelect(devices) {
+    const deviceSelect = document.getElementById('device-id');
+    if (!deviceSelect) return;
+
+    deviceSelect.innerHTML = '<option value="">所有设备</option>';
+
+    devices.forEach(device => {
+        const option = document.createElement('option');
+        option.value = device.device_id;
+        option.textContent = `${device.device_id} (${device.device_type === 'master' ? '主机' : '从机'} - ${device.location})`;
+        deviceSelect.appendChild(option);
+    });
 }
 
 // 设置事件监听器
 function setupEventListeners() {
-    // 添加窗口大小改变事件监听器
-    window.addEventListener('resize', function() {
-        // 重新调整图表大小
-        Object.values(charts).forEach(chart => {
-            if (chart.resize) {
-                chart.resize();
+    // 时间范围选择
+    const timeRangeSelect = document.getElementById('time-range');
+    if (timeRangeSelect) {
+        timeRangeSelect.addEventListener('change', () => {
+            currentPage = 1; // 重置页码
+            loadHistoryData();
+        });
+    }
+
+    // 设备类型选择
+    const deviceTypeSelect = document.getElementById('device-type');
+    if (deviceTypeSelect) {
+        deviceTypeSelect.addEventListener('change', () => {
+            filterDeviceOptions();
+            currentPage = 1; // 重置页码
+            loadHistoryData();
+        });
+    }
+
+    // 设备ID选择
+    const deviceIdSelect = document.getElementById('device-id');
+    if (deviceIdSelect) {
+        deviceIdSelect.addEventListener('change', () => {
+            currentPage = 1; // 重置页码
+            loadHistoryData();
+        });
+    }
+
+    // 刷新按钮
+    const refreshBtn = document.getElementById('refresh-btn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 刷新中...';
+
+            loadHistoryData().finally(() => {
+                setTimeout(() => {
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> 刷新数据';
+                }, 1000);
+            });
+        });
+    }
+
+    // 分页按钮
+    const prevBtn = document.getElementById('prev-page-btn');
+    const nextBtn = document.getElementById('next-page-btn');
+
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                updateRecordsTable();
             }
         });
-    });
-    
-    // 添加设备操作按钮事件
-    document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('action-btn')) {
-            const deviceId = e.target.closest('tr').dataset.deviceId;
-            const action = e.target.dataset.action;
-            
-            if (action === 'details') {
-                showDeviceDetails(deviceId);
-            } else if (action === 'refresh') {
-                refreshDevice(deviceId);
+    }
+
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            const maxPage = Math.ceil(totalRecords / recordsPerPage);
+            if (currentPage < maxPage) {
+                currentPage++;
+                updateRecordsTable();
             }
-        }
+        });
+    }
+}
+
+// 根据设备类型过滤设备选项
+function filterDeviceOptions() {
+    const deviceType = document.getElementById('device-type').value;
+    const deviceIdSelect = document.getElementById('device-id');
+
+    if (!deviceIdSelect) return;
+
+    const currentValue = deviceIdSelect.value;
+    deviceIdSelect.innerHTML = '<option value="">所有设备</option>';
+
+    const filteredDevices = deviceType === 'all'
+        ? availableDevices
+        : availableDevices.filter(device => device.device_type === deviceType);
+
+    filteredDevices.forEach(device => {
+        const option = document.createElement('option');
+        option.value = device.device_id;
+        option.textContent = `${device.device_id} (${device.device_type === 'master' ? '主机' : '从机'} - ${device.location})`;
+        deviceIdSelect.appendChild(option);
     });
+
+    // 恢复之前的选择（如果仍然有效）
+    if (currentValue && filteredDevices.some(device => device.device_id === currentValue)) {
+        deviceIdSelect.value = currentValue;
+    }
 }
 
-// 启动定时器
-function startTimers() {
-    // 每30秒检查一次连接状态
-    setInterval(checkConnection, 30000);
-    
-    // 每10秒更新一次图表数据
-    setInterval(updateChartPeriodically, 10000);
+// 加载历史数据
+async function loadHistoryData() {
+    try {
+        showLoading(true);
+
+        const hours = document.getElementById('time-range').value;
+        const deviceType = document.getElementById('device-type').value;
+        const deviceId = document.getElementById('device-id').value;
+
+        // 构建查询参数
+        const params = new URLSearchParams({
+            hours: hours,
+            device_type: deviceType
+        });
+
+        if (deviceId) {
+            params.append('device_id', deviceId);
+        }
+
+        // 获取历史数据
+        const historyResponse = await fetch(`/api/history/dashboard?${params}`);
+        const historyData = await historyResponse.json();
+        console.log('API response - historyData:', historyData);
+        console.log('Devices count in historyData:', historyData.devices ? historyData.devices.length : 'undefined');
+
+        // 获取统计摘要
+        const summaryResponse = await fetch(`/api/history/summary?${params}`);
+        const summaryData = await summaryResponse.json();
+        console.log('API response - summaryData:', summaryData);
+
+        if (!historyResponse.ok || !summaryResponse.ok) {
+            throw new Error('获取历史数据失败');
+        }
+
+        // 如果没有数据，尝试使用现有的数据范围API
+        if (historyData.devices.length === 0) {
+            console.log('当前时间范围无数据，尝试获取现有数据...');
+            await loadExistingData();
+            showLoading(false);
+            return;
+        }
+
+        currentHistoryData = historyData;
+
+        // 更新界面
+        updateHistoryTable(historyData.devices);
+        updateStatistics(summaryData.statistics);
+
+        showLoading(false);
+        showNotification('加载成功', `已加载${hours}小时的历史数据`, 'success');
+
+    } catch (error) {
+        console.error('加载历史数据失败:', error);
+        showLoading(false);
+        showNotification('加载失败', '无法加载历史数据', 'error');
+    }
 }
 
-// 更新设备表格
-function updateDevices(deviceData) {
-    const tbody = document.getElementById('device-table-body');
-    if (!tbody) return;
-    
+// 加载现有数据（备用方案）
+async function loadExistingData() {
+    try {
+        // 使用绝对时间范围查询现有数据，获取前1000条
+        const startResponse = await fetch('/api/data/range?start=2025-10-24T00:00:00Z&end=2025-10-26T00:00:00Z&limit=1000');
+        const data = await startResponse.json();
+
+        if (!startResponse.ok || !Array.isArray(data) || data.length === 0) {
+            showNotification('无历史数据', '数据库中没有找到历史数据记录', 'warning');
+            return;
+        }
+
+        // 获取设备信息
+        const devicesResponse = await fetch('/api/devices/all');
+        const devices = await devicesResponse.json();
+
+        const deviceInfoMap = {};
+        devices.forEach(device => {
+            deviceInfoMap[device.device_id] = {
+                device_type: device.device_type,
+                location: device.location,
+                status: device.status
+            };
+        });
+
+        // 为每条记录添加设备信息
+        const recordsWithDeviceInfo = data.map(record => ({
+            ...record,
+            device_type: deviceInfoMap[record.device_id]?.device_type || 'unknown',
+            location: deviceInfoMap[record.device_id]?.location || '未知'
+        }));
+
+        currentHistoryData = {
+            records: recordsWithDeviceInfo,
+            time_range: {
+                start: '2025-10-24T00:00:00Z',
+                end: '2025-10-26T00:00:00Z',
+                hours: 48
+            }
+        };
+
+        totalRecords = recordsWithDeviceInfo.length;
+        currentPage = 1;
+
+        // 更新界面
+        updateRecordsTable();
+        updateRecordsInfo();
+        updateStatisticsFromRecords(recordsWithDeviceInfo);
+
+        showNotification('加载成功', `已加载现有历史数据 (${data.length} 条记录)`, 'success');
+
+    } catch (error) {
+        console.error('加载现有数据失败:', error);
+        showNotification('加载失败', '无法加载现有历史数据', 'error');
+    }
+}
+
+// 更新数据记录表格
+function updateRecordsTable() {
+    const tbody = document.getElementById('history-table-body');
+    if (!tbody || !currentHistoryData || !currentHistoryData.records) return;
+
     tbody.innerHTML = '';
-    
-    deviceData.forEach(device => {
-        devices[device.device_id] = device;
-        const row = createDeviceTableRow(device);
+
+    if (currentHistoryData.records.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #666;">暂无历史数据</td></tr>';
+        return;
+    }
+
+    // 计算分页
+    const startIndex = (currentPage - 1) * recordsPerPage;
+    const endIndex = Math.min(startIndex + recordsPerPage, currentHistoryData.records.length);
+    const pageRecords = currentHistoryData.records.slice(startIndex, endIndex);
+
+    pageRecords.forEach(record => {
+        const row = document.createElement('tr');
+
+        const deviceTypeLabel = record.device_type === 'master' ? '主机' :
+                              record.device_type === 'slave' ? '从机' : '未知';
+        const deviceTypeClass = record.device_type === 'master' ? 'master-type' :
+                              record.device_type === 'slave' ? 'slave-type' : 'unknown-type';
+
+        const statusBadge = getStatusBadge(record.alert);
+
+        row.innerHTML = `
+            <td>${formatDateTime(record.timestamp)}</td>
+            <td>${record.device_id}</td>
+            <td><span class="${deviceTypeClass}">${deviceTypeLabel}</span></td>
+            <td>${record.temperature ? record.temperature.toFixed(1) + '°C' : '--'}</td>
+            <td>${record.smoke || '--'}</td>
+            <td>${record.flame || '--'}</td>
+            <td>${record.humidity ? record.humidity.toFixed(1) + '%' : '--'}</td>
+            <td>${record.light || '--'}</td>
+            <td>${statusBadge}</td>
+        `;
+
         tbody.appendChild(row);
     });
+
+    // 更新分页按钮状态
+    updatePaginationButtons();
 }
 
-// 创建设备表格行
-function createDeviceTableRow(device) {
-    const row = document.createElement('tr');
-    row.dataset.deviceId = device.device_id;
-    
-    const statusBadge = createStatusBadge(device.status);
-    const lastUpdate = formatTime(device.last_update);
-    
-    row.innerHTML = `
-        <td>${device.device_id}</td>
-        <td>${device.location}</td>
-        <td>${device.temperature.toFixed(1)}°C</td>
-        <td>${device.smoke_level.toFixed(0)}</td>
-        <td>${statusBadge}</td>
-        <td>${lastUpdate}</td>
-        <td>
-            <button class="action-btn primary" data-action="details">
-                <i class="fas fa-info-circle"></i> 详情
-            </button>
-        </td>
-    `;
-    
-    // 根据状态设置行背景色
-    if (device.status === '警报') {
-        row.style.backgroundColor = '#ffebee';
-    } else if (device.status === '警告') {
-        row.style.backgroundColor = '#fff3e0';
+// 更新记录信息
+function updateRecordsInfo() {
+    const countElement = document.getElementById('records-count');
+    const timeRangeElement = document.getElementById('records-time-range');
+
+    if (countElement) {
+        countElement.textContent = `共 ${totalRecords} 条记录`;
     }
-    
-    return row;
+
+    if (timeRangeElement && currentHistoryData && currentHistoryData.time_range) {
+        const startDate = new Date(currentHistoryData.time_range.start);
+        const endDate = new Date(currentHistoryData.time_range.end);
+        timeRangeElement.textContent = `时间范围: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+    }
 }
 
-// 创建状态徽章
-function createStatusBadge(status) {
+// 更新分页按钮
+function updatePaginationButtons() {
+    const prevBtn = document.getElementById('prev-page-btn');
+    const nextBtn = document.getElementById('next-page-btn');
+    const pageInfo = document.getElementById('page-info');
+
+    const maxPage = Math.ceil(totalRecords / recordsPerPage);
+
+    if (prevBtn) {
+        prevBtn.disabled = currentPage <= 1;
+    }
+
+    if (nextBtn) {
+        nextBtn.disabled = currentPage >= maxPage;
+    }
+
+    if (pageInfo) {
+        pageInfo.textContent = `第 ${currentPage} 页 / 共 ${maxPage} 页`;
+    }
+}
+
+// 获取状态徽章
+function getStatusBadge(alertStatus) {
     const badges = {
-        '正常': '<span style="color: #4CAF50; font-weight: bold;">✓ 正常</span>',
-        '警告': '<span style="color: #FF9800; font-weight: bold;">⚠ 警告</span>',
-        '警报': '<span style="color: #F44336; font-weight: bold;">🚨 警报</span>'
+        'normal': '<span style="color: #4CAF50; font-weight: bold;">✓ 正常</span>',
+        'warning': '<span style="color: #FF9800; font-weight: bold;">⚠ 警告</span>',
+        'alarm': '<span style="color: #F44336; font-weight: bold;">🚨 警报</span>'
     };
-    return badges[status] || status;
+    return badges[alertStatus] || '<span style="color: #666;">--</span>';
 }
 
-// 更新图表
-function updateCharts(deviceData) {
-    const currentTime = new Date().toLocaleTimeString();
-    
-    // 计算平均值
-    const avgTemp = deviceData.reduce((sum, device) => sum + device.temperature, 0) / deviceData.length;
-    const avgSmoke = deviceData.reduce((sum, device) => sum + device.smoke_level, 0) / deviceData.length;
-    
-    // 更新历史数据（保留最近20个数据点）
-    historicalData.timestamps.push(currentTime);
-    historicalData.temperature.push(avgTemp);
-    historicalData.smoke.push(avgSmoke);
-    
-    if (historicalData.timestamps.length > 20) {
-        historicalData.timestamps.shift();
-        historicalData.temperature.shift();
-        historicalData.smoke.shift();
+// 更新历史数据表格
+function updateHistoryTable(devices) {
+    const tbody = document.getElementById('history-table-body');
+    if (!tbody) {
+        console.error('updateHistoryTable: tbody element not found');
+        return;
     }
-    
-    // 更新温度图表
-    if (charts.temperature) {
-        charts.temperature.data.labels = historicalData.timestamps;
-        charts.temperature.data.datasets[0].data = historicalData.temperature;
-        charts.temperature.update('none'); // 无动画更新以提高性能
+
+    console.log('updateHistoryTable called with devices:', devices);
+    tbody.innerHTML = '';
+
+    if (!devices || devices.length === 0) {
+        console.log('updateHistoryTable: no devices data');
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #666;">暂无历史数据</td></tr>';
+        return;
     }
-    
-    // 更新烟雾图表
-    if (charts.smoke) {
-        charts.smoke.data.labels = historicalData.timestamps;
-        charts.smoke.data.datasets[0].data = historicalData.smoke;
-        charts.smoke.update('none');
+
+    // 将所有设备的数据合并到一个数组中
+    const allRecords = [];
+    console.log('Processing devices for records...');
+    devices.forEach((device, index) => {
+        console.log(`Device ${index + 1}:`, device.device_id, 'data points:', device.data ? device.data.length : 'none');
+        if (device.data && Array.isArray(device.data)) {
+            device.data.forEach(record => {
+                allRecords.push({
+                    timestamp: record.timestamp,
+                    device_id: device.device_id,
+                    device_type: device.device_type,
+                    temperature: record.temperature,
+                    smoke: record.smoke,
+                    flame: record.flame,
+                    humidity: record.humidity,
+                    light_level: record.light,
+                    alert: record.alert
+                });
+            });
+        }
+    });
+    console.log('Total allRecords after processing:', allRecords.length);
+
+    // 按时间排序（最新的在前）
+    allRecords.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // 更新记录计数
+    const recordsCountElement = document.getElementById('records-count');
+    if (recordsCountElement) {
+        recordsCountElement.textContent = `共 ${allRecords.length} 条记录`;
     }
-    
-    // 更新状态饼图
-    if (charts.status) {
-        const statusCounts = {
-            normal: 0,
-            warning: 0,
-            alarm: 0
-        };
-        
-        deviceData.forEach(device => {
-            const status = device.status.toLowerCase();
-            if (statusCounts.hasOwnProperty(status)) {
-                statusCounts[status]++;
-            }
-        });
-        
-        charts.status.data.datasets[0].data = [
-            statusCounts.normal,
-            statusCounts.warning,
-            statusCounts.alarm
-        ];
-        charts.status.update('none');
+
+    // 分页显示
+    const startIndex = (currentPage - 1) * recordsPerPage;
+    const endIndex = Math.min(startIndex + recordsPerPage, allRecords.length);
+    const pageRecords = allRecords.slice(startIndex, endIndex);
+
+    pageRecords.forEach(record => {
+        const row = document.createElement('tr');
+
+        const deviceTypeLabel = record.device_type === 'master' ? '主机' :
+                              record.device_type === 'slave' ? '从机' : '未知';
+        const deviceTypeClass = record.device_type === 'master' ? 'master-type' :
+                              record.device_type === 'slave' ? 'slave-type' : 'unknown-type';
+
+        const statusBadge = getStatusBadge(record.alert);
+
+        row.innerHTML = `
+            <td>${formatDateTime(record.timestamp)}</td>
+            <td>${record.device_id}</td>
+            <td><span class="${deviceTypeClass}">${deviceTypeLabel}</span></td>
+            <td>${record.temperature || '--'}°C</td>
+            <td>${record.smoke || '--'}</td>
+            <td>${record.flame || '--'}</td>
+            <td>${record.humidity || '--'}%</td>
+            <td>${record.light_level || '--'}</td>
+            <td>${statusBadge}</td>
+        `;
+
+        tbody.appendChild(row);
+    });
+
+    // 更新分页信息
+    updatePagination(allRecords.length);
+}
+
+// 更新分页信息
+function updatePagination(totalRecords) {
+    const pageInfo = document.getElementById('page-info');
+    const prevBtn = document.getElementById('prev-page-btn');
+    const nextBtn = document.getElementById('next-page-btn');
+    const totalPages = Math.ceil(totalRecords / recordsPerPage);
+
+    if (pageInfo) {
+        pageInfo.textContent = `第 ${currentPage} 页，共 ${totalPages} 页`;
+    }
+
+    if (prevBtn) {
+        prevBtn.disabled = currentPage <= 1;
+    }
+
+    if (nextBtn) {
+        nextBtn.disabled = currentPage >= totalPages;
     }
 }
 
 // 更新统计信息
-function updateStatistics(deviceData) {
-    // 计算统计数据
-    const totalDevices = deviceData.length;
-    const avgTemp = deviceData.reduce((sum, device) => sum + device.temperature, 0) / totalDevices;
-    const avgSmoke = deviceData.reduce((sum, device) => sum + device.smoke_level, 0) / totalDevices;
-    
-    // 更新显示
-    const totalDevicesElement = document.getElementById('total-devices');
-    const avgTempElement = document.getElementById('avg-temperature');
-    const avgSmokeElement = document.getElementById('avg-smoke');
-    
-    if (totalDevicesElement) totalDevicesElement.textContent = totalDevices;
-    if (avgTempElement) avgTempElement.textContent = avgTemp.toFixed(1) + '°C';
-    if (avgSmokeElement) avgSmokeElement.textContent = avgSmoke.toFixed(0);
-}
+function updateStatistics(statistics) {
+    const elements = {
+        'total-records': statistics.total_records || 0,
+        'avg-temperature': (statistics.avg_temperature || 0).toFixed(1) + '°C',
+        'avg-smoke': (statistics.avg_smoke || 0).toFixed(0),
+        'total-alarms': statistics.alert_count || 0,
+        'max-temperature': (statistics.max_temperature || 0).toFixed(1) + '°C',
+        'avg-flame': (statistics.avg_flame || 0).toFixed(0)
+    };
 
-// 更新今日报警计数
-function updateTodayAlarmsCount(alarmData) {
-    const today = new Date().toDateString();
-    const todayAlarms = alarmData.filter(alarm => 
-        new Date(alarm.timestamp * 1000).toDateString() === today
-    );
-    
-    const todayAlarmsElement = document.getElementById('today-alarms');
-    if (todayAlarmsElement) {
-        todayAlarmsElement.textContent = todayAlarms.length;
-    }
-}
-
-// 定期更新图表
-function updateChartPeriodically() {
-    // 如果没有收到新的数据，保持图表显示
-    if (Object.keys(devices).length > 0) {
-        const deviceArray = Object.values(devices);
-        updateCharts(deviceArray);
-    }
-}
-
-// 处理报警
-function handleAlarm(alarmData) {
-    console.log('仪表板收到报警:', alarmData);
-    
-    // 播放报警声音
-    playAlarmSound();
-    
-    // 显示报警通知
-    showNotification(
-        '火灾警报！',
-        `${alarmData.location} 检测到火灾风险！`,
-        'alarm'
-    );
-    
-    // 浏览器通知
-    showBrowserNotification('火灾警报', alarmData.message);
-    
-    // 更新今日报警计数
-    const todayAlarmsElement = document.getElementById('today-alarms');
-    if (todayAlarmsElement) {
-        const currentCount = parseInt(todayAlarmsElement.textContent) || 0;
-        todayAlarmsElement.textContent = currentCount + 1;
-    }
-}
-
-// 显示设备详情
-function showDeviceDetails(deviceId) {
-    const device = devices[deviceId];
-    if (!device) return;
-    
-    // 创建详细信息的模态框
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>设备详细信息 - ${device.device_id}</h3>
-                <button class="modal-close" onclick="this.closest('.modal').remove()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="detail-grid">
-                    <div class="detail-item">
-                        <label>设备ID:</label>
-                        <span>${device.device_id}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>位置:</label>
-                        <span>${device.location}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>当前温度:</label>
-                        <span class="temp-value">${device.temperature.toFixed(1)}°C</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>烟雾水平:</label>
-                        <span class="smoke-value">${device.smoke_level.toFixed(0)}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>设备状态:</label>
-                        <span>${createStatusBadge(device.status)}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>最后更新:</label>
-                        <span>${formatTime(device.last_update)}</span>
-                    </div>
-                </div>
-                
-                <div class="device-charts">
-                    <h4>实时趋势</h4>
-                    <canvas id="device-detail-chart" width="400" height="200"></canvas>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // 创建设备详情图表
-    setTimeout(() => {
-        createDeviceDetailChart(deviceId);
-    }, 100);
-    
-    // 点击背景关闭
-    modal.addEventListener('click', function(e) {
-        if (e.target === modal) {
-            modal.remove();
+    Object.entries(elements).forEach(([id, value]) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = value;
         }
     });
 }
 
-// 创建设备详情图表
-function createDeviceDetailChart(deviceId) {
-    const ctx = document.getElementById('device-detail-chart');
-    if (!ctx) return;
-    
-    // 生成模拟历史数据
-    const labels = [];
-    const tempData = [];
-    const smokeData = [];
-    
-    for (let i = 19; i >= 0; i--) {
-        const time = new Date(Date.now() - i * 60000).toLocaleTimeString();
-        labels.push(time);
-        
-        // 基于当前值生成历史数据
-        const device = devices[deviceId];
-        if (device) {
-            tempData.push(device.temperature + (Math.random() - 0.5) * 2);
-            smokeData.push(Math.max(0, device.smoke_level + (Math.random() - 0.5) * 10));
-        }
+// 从记录数据计算统计信息
+function updateStatisticsFromRecords(records) {
+    if (!records || records.length === 0) {
+        updateStatistics({
+            total_records: 0,
+            avg_temperature: 0,
+            avg_smoke: 0,
+            max_temperature: 0,
+            avg_flame: 0,
+            alert_count: 0
+        });
+        return;
     }
-    
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: '温度 (°C)',
-                data: tempData,
-                borderColor: '#F44336',
-                backgroundColor: 'rgba(244, 67, 54, 0.1)',
-                yAxisID: 'y-temp',
-                tension: 0.4
-            }, {
-                label: '烟雾水平',
-                data: smokeData,
-                borderColor: '#FF9800',
-                backgroundColor: 'rgba(255, 152, 0, 0.1)',
-                yAxisID: 'y-smoke',
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false,
-            },
-            scales: {
-                'y-temp': {
-                    type: 'linear',
-                    display: true,
-                    position: 'left',
-                    title: {
-                        display: true,
-                        text: '温度 (°C)'
-                    }
-                },
-                'y-smoke': {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    title: {
-                        display: true,
-                        text: '烟雾水平'
-                    },
-                    grid: {
-                        drawOnChartArea: false,
-                    },
-                }
-            },
-            plugins: {
-                legend: {
-                    position: 'top'
-                }
-            }
-        }
+
+    const temps = records.map(r => r.temperature).filter(t => t != null);
+    const smokes = records.map(r => r.smoke).filter(s => s != null);
+    const flames = records.map(r => r.flame).filter(f => f != null);
+    const alerts = records.filter(r => ['warning', 'alarm'].includes(r.alert));
+
+    const statistics = {
+        total_records: records.length,
+        avg_temperature: temps.length > 0 ? temps.reduce((a, b) => a + b, 0) / temps.length : 0,
+        avg_smoke: smokes.length > 0 ? smokes.reduce((a, b) => a + b, 0) / smokes.length : 0,
+        max_temperature: temps.length > 0 ? Math.max(...temps) : 0,
+        avg_flame: flames.length > 0 ? flames.reduce((a, b) => a + b, 0) / flames.length : 0,
+        alert_count: alerts.length
+    };
+
+    updateStatistics(statistics);
+}
+
+// 自动刷新
+function autoRefresh() {
+    console.log('自动刷新历史数据...');
+    loadHistoryData();
+}
+
+// 显示/隐藏加载状态
+function showLoading(show) {
+    const loadingElements = document.querySelectorAll('.loading-overlay');
+    loadingElements.forEach(element => {
+        element.style.display = show ? 'block' : 'none';
     });
-}
 
-// 刷新设备数据
-function refreshDevice(deviceId) {
-    // 显示加载状态
-    const button = document.querySelector(`tr[data-device-id="${deviceId}"] .action-btn`);
-    if (button) {
-        const originalText = button.innerHTML;
-        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 刷新中...';
-        button.disabled = true;
-        
-        // 模拟刷新延迟
-        setTimeout(() => {
-            button.innerHTML = originalText;
-            button.disabled = false;
-            showNotification('刷新成功', `设备 ${deviceId} 数据已更新`, 'success');
-        }, 1000);
+    // 如果没有专门的加载遮罩，创建一个
+    if (show && loadingElements.length === 0) {
+        const overlay = document.createElement('div');
+        overlay.className = 'loading-overlay';
+        overlay.innerHTML = `
+            <div class="loading-spinner">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>正在加载历史数据...</p>
+            </div>
+        `;
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            color: white;
+            font-size: 18px;
+        `;
+        document.body.appendChild(overlay);
+    } else if (!show) {
+        loadingElements.forEach(element => element.remove());
     }
 }
 
-// 检查连接状态
-function checkConnection() {
-    if (socket && !socket.connected) {
-        showNotification('连接断开', '正在尝试重新连接...', 'warning');
-    }
-}
+// 格式化日期时间
+function formatDateTime(timestamp) {
+    if (!timestamp) return '--';
 
-// 格式化时间
-function formatTime(timestamp) {
-    const date = new Date(timestamp * 1000);
-    const now = new Date();
-    const diff = now - date;
-    
-    if (diff < 60000) {
-        return '刚刚';
-    } else if (diff < 3600000) {
-        return Math.floor(diff / 60000) + '分钟前';
-    } else if (diff < 86400000) {
-        return Math.floor(diff / 3600000) + '小时前';
-    } else {
-        return date.toLocaleString('zh-CN');
+    try {
+        const date = new Date(timestamp);
+        return date.toLocaleString('zh-CN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (error) {
+        return '--';
     }
 }
 
@@ -613,9 +591,23 @@ function showNotification(title, message, type = 'info') {
         </div>
         <div class="notification-message">${message}</div>
     `;
-    
+
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#F44336' : type === 'warning' ? '#FF9800' : '#2196F3'};
+        color: white;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 10000;
+        max-width: 400px;
+        animation: slideIn 0.3s ease;
+    `;
+
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
         if (notification.parentElement) {
             notification.remove();
@@ -623,117 +615,263 @@ function showNotification(title, message, type = 'info') {
     }, 5000);
 }
 
-// 显示浏览器通知
-function showBrowserNotification(title, message) {
-    if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, {
-            body: message,
-            icon: '/static/img/fire-alarm-icon.png'
-        });
-    }
+// 添加历史数据中心专用样式
+const historyDashboardStyles = `
+.filter-section {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    margin: 20px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-// 播放报警声音
-function playAlarmSound() {
-    // 使用Web Audio API创建报警声音
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    
-    oscillator.start();
-    oscillator.stop(audioContext.currentTime + 0.5);
+.filter-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: end;
 }
 
-// 添加仪表板专用样式
-const dashboardStyles = `
-.detail-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
-    margin-bottom: 20px;
-}
-
-.detail-item {
+.filter-group {
     display: flex;
     flex-direction: column;
-    padding: 10px;
-    background: #f8f9fa;
-    border-radius: 6px;
+    min-width: 150px;
 }
 
-.detail-item label {
+.filter-group label {
     font-weight: bold;
-    color: #666;
     margin-bottom: 5px;
-    font-size: 0.9rem;
-}
-
-.detail-item span {
-    color: #333;
-    font-size: 1.1rem;
-}
-
-.temp-value {
-    color: #F44336 !important;
-    font-weight: bold;
-}
-
-.smoke-value {
-    color: #FF9800 !important;
-    font-weight: bold;
-}
-
-.device-charts {
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid #eee;
-}
-
-.device-charts h4 {
-    margin-bottom: 15px;
     color: #333;
 }
 
-.chart-container {
-    height: 300px;
-    position: relative;
+.filter-select, .refresh-btn {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background: white;
+    font-size: 14px;
+}
+
+.refresh-btn {
+    background: #2196F3;
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+    background: #1976D2;
+}
+
+.refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.records-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 20px 0;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.records-info {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.records-info span {
+    color: #666;
+    font-size: 14px;
+}
+
+.records-pagination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.records-pagination button {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.records-pagination button:hover:not(:disabled) {
+    background: #f0f0f0;
+}
+
+.records-pagination button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.records-pagination span {
+    color: #333;
+    font-weight: bold;
+    min-width: 100px;
+    text-align: center;
+}
+
+.history-table-container {
+    overflow-x: auto;
+    margin: 20px 0;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.history-table th,
+.history-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+    white-space: nowrap;
+}
+
+.history-table th {
+    background: #f5f5f5;
+    font-weight: bold;
+    color: #333;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.history-table tr:hover {
+    background: #f9f9f9;
+}
+
+.master-type {
+    background: #ffebee;
+    color: #c62828;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.slave-type {
+    background: #e3f2fd;
+    color: #1565c0;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.unknown-type {
+    background: #f5f5f5;
+    color: #666;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.stat-card {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.stat-icon {
+    font-size: 24px;
+    color: #2196F3;
+    margin-bottom: 10px;
+}
+
+.stat-content h4 {
+    margin: 0 0 5px 0;
+    color: #666;
+    font-size: 14px;
+}
+
+.stat-value {
+    margin: 0;
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }
 
 @media (max-width: 768px) {
-    .detail-grid {
-        grid-template-columns: 1fr;
+    .filter-container {
+        flex-direction: column;
+        align-items: stretch;
     }
-    
-    .charts-grid {
-        grid-template-columns: 1fr;
+
+    .filter-group {
+        min-width: auto;
+    }
+
+    .records-controls {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .records-info {
+        flex-direction: column;
+        gap: 10px;
+        align-items: flex-start;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .history-table-container {
+        font-size: 12px;
+    }
+
+    .history-table th,
+    .history-table td {
+        padding: 8px 6px;
     }
 }
 `;
 
 // 添加样式到页面
-if (!document.querySelector('#dashboard-styles')) {
+if (!document.querySelector('#history-dashboard-styles')) {
     const styleElement = document.createElement('style');
-    styleElement.id = 'dashboard-styles';
-    styleElement.textContent = dashboardStyles;
+    styleElement.id = 'history-dashboard-styles';
+    styleElement.textContent = historyDashboardStyles;
     document.head.appendChild(styleElement);
 }
 
-// 页面卸载时清理
-window.addEventListener('beforeunload', function() {
-    if (socket) {
-        socket.disconnect();
-    }
-    
-    // 清理图表
-    Object.values(charts).forEach(chart => {
-        if (chart.destroy) {
-            chart.destroy();
-        }
-    });
-});

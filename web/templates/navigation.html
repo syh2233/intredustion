@@ -1,0 +1,21 @@
+<!-- 统一底部导航栏 -->
+<nav class="bottom-nav" role="navigation" aria-label="底部导航">
+    <div class="nav-container">
+        <a href="/" class="nav-item {% if request.endpoint == 'index' %}active{% endif %}">
+            <i class="fas fa-home"></i>
+            <span>首页</span>
+        </a>
+        <a href="/dashboard" class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+            <i class="fas fa-history"></i>
+            <span>历史数据</span>
+        </a>
+        <a href="/monitor" class="nav-item {% if request.endpoint == 'monitor' %}active{% endif %}">
+            <i class="fas fa-microchip"></i>
+            <span>从机监控</span>
+        </a>
+        <a href="/intelligence" class="nav-item {% if request.endpoint == 'intelligence' %}active{% endif %}">
+            <i class="fas fa-brain"></i>
+            <span>智能分析</span>
+        </a>
+    </div>
+</nav>

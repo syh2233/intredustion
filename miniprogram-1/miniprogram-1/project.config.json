@@ -1,85 +1,36 @@
 {
-  "miniprogramRoot": "miniprogram/",
-  "cloudfunctionRoot": "cloudfunctions/",
   "setting": {
-    "urlCheck": true,
     "es6": true,
-    "enhance": true,
     "postcss": true,
-    "preloadBackgroundData": false,
     "minified": true,
-    "newFeature": true,
-    "coverView": true,
-    "nodeModules": false,
-    "autoAudits": false,
-    "showShadowRootInWxmlPanel": true,
-    "scopeDataCheck": false,
     "uglifyFileName": false,
-    "checkInvalidKey": true,
-    "checkSiteMap": true,
-    "uploadWithSourceMap": true,
-    "compileHotReLoad": false,
-    "useMultiFrameRuntime": true,
-    "useApiHook": true,
-    "useApiHostProcess": true,
+    "enhance": true,
+    "packNpmRelationList": [],
     "babelSetting": {
       "ignore": [],
       "disablePlugins": [],
       "outputPath": ""
     },
-    "enableEngineNative": false,
-    "useIsolateContext": true,
-    "useCompilerModule": true,
-    "userConfirmedUseCompilerModuleSwitch": false,
-    "userConfirmedBundleSwitch": false,
-    "packNpmManually": false,
-    "packNpmRelationList": [],
-    "minifyWXSS": true,
-    "compileWorklet": false,
+    "useCompilerPlugins": false,
     "minifyWXML": true,
+    "compileWorklet": false,
+    "uploadWithSourceMap": true,
+    "packNpmManually": false,
+    "minifyWXSS": true,
     "localPlugins": false,
     "disableUseStrict": false,
-    "useCompilerPlugins": false,
     "condition": false,
     "swc": false,
     "disableSWC": true
   },
-  "appid": "wx8d16f1957218897c",
-  "projectname": "quickstart-wx-cloud",
-  "libVersion": "2.20.1",
-  "cloudfunctionTemplateRoot": "cloudfunctionTemplate/",
-  "condition": {
-    "search": {
-      "list": []
-    },
-    "conversation": {
-      "list": []
-    },
-    "plugin": {
-      "list": []
-    },
-    "game": {
-      "list": []
-    },
-    "miniprogram": {
-      "list": [
-        {
-          "id": -1,
-          "name": "db guide",
-          "pathName": "pages/databaseGuide/databaseGuide"
-        }
-      ]
-    }
-  },
   "compileType": "miniprogram",
-  "srcMiniprogramRoot": "miniprogram/",
+  "simulatorPluginLibVersion": {},
   "packOptions": {
     "ignore": [],
     "include": []
   },
-  "editorSetting": {
-    "tabIndent": "insertSpaces",
-    "tabSize": 2
-  },
-  "simulatorPluginLibVersion": {}
+  "appid": "wxf6416fc4213b4f49",
+  "editorSetting": {},
+  "libVersion": "3.10.1",
+  "miniprogramRoot": "miniprogram-1/miniprogram/"
 }

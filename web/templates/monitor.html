@@ -3,176 +3,476 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MQTT实时监控 - ESP32火灾报警系统</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <title>从机数据监控 - ESP32火灾报警系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        .sensor-card {
+        /* 卡片样式 */
+        .data-section {
+            margin: 30px 0;
+        }
+
+        .data-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .data-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
             transition: all 0.3s ease;
         }
-        .sensor-card:hover {
+
+        .data-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         }
-        .status-normal { background: linear-gradient(135deg, #10b981, #059669); }
-        .status-warning { background: linear-gradient(135deg, #f59e0b, #d97706); }
-        .status-alarm { background: linear-gradient(135deg, #ef4444, #dc2626); }
-        .data-row {
-            animation: slideIn 0.5s ease-out;
+
+        .card-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
         }
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateX(-20px); }
-            to { opacity: 1; transform: translateX(0); }
+
+        .card-header h3 {
+            margin: 0 0 8px 0;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
-        .pulse {
+
+        .card-header p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+
+        .card-content {
+            padding: 20px;
+        }
+
+        .data-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .data-item {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid #3b82f6;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .data-item.sensor-data {
+            border-left-color: #3b82f6;
+        }
+
+        .data-item.alert-data {
+            border-left-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .alert-time {
+            font-size: 0.8em;
+            color: #6b7280;
+        }
+
+        .alert-type {
+            background: #dc2626;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7em;
+        }
+
+        .alert-message {
+            font-weight: 500;
+            color: #dc2626;
+            margin-bottom: 8px;
+        }
+
+        .alert-data {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-size: 0.8em;
+            color: #6b7280;
+        }
+
+        /* 设备卡片样式 */
+        .device-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border: 2px solid #e5e7eb;
+            transition: all 0.3s ease;
+        }
+
+        .device-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .device-card.status-normal {
+            border-color: #10b981;
+            background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+        }
+
+        .device-card.status-warning {
+            border-color: #f59e0b;
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        }
+
+        .device-card.status-alarm {
+            border-color: #ef4444;
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+        }
+
+        /* 连接状态指示器 */
+        .connection-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .connection-status {
+            background: #6b7280;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+
+        .connection-status.connected {
+            background: #10b981;
+        }
+
+        .connection-status.disconnected {
+            background: #ef4444;
+        }
+
+        .connection-status.connecting {
+            background: #6b7280;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #d1d5db;
+        }
+
+        .status-dot.connected {
+            background: #86efac;
+            box-shadow: 0 0 5px #10b981;
+        }
+
+        .status-dot.disconnected {
+            background: #fca5a5;
+            box-shadow: 0 0 5px #ef4444;
+        }
+
+        .status-dot.connecting {
+            background: #d1d5db;
             animation: pulse 2s infinite;
         }
+
+        /* 动画 */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
         @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* 数据项样式 */
+        .data-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .data-time {
+            font-size: 0.8em;
+            color: #6b7280;
+        }
+
+        .data-status {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7em;
+            font-weight: 500;
+        }
+
+        .data-status.normal {
+            background: #10b981;
+            color: white;
+        }
+
+        .data-status.warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .data-status.alarm {
+            background: #ef4444;
+            color: white;
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .data-item-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.9em;
+        }
+
+        .data-device-id {
+            font-size: 0.8em;
+            color: #6b7280;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        /* 设备卡片详细样式 */
+        .device-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .device-name {
+            font-weight: 500;
+            color: #111827;
+            margin: 0;
+        }
+
+        .device-status {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.7em;
+            font-weight: 500;
+            color: white;
+        }
+
+        .device-status.status-normal {
+            background: #10b981;
+        }
+
+        .device-status.status-warning {
+            background: #f59e0b;
+        }
+
+        .device-status.status-alarm {
+            background: #ef4444;
+        }
+
+        .device-data {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .data-row-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9em;
+        }
+
+        .data-label {
+            color: #6b7280;
+        }
+
+        .data-value {
+            font-weight: 500;
+            color: #111827;
+        }
+
+        .device-update-time {
+            font-size: 0.75em;
+            color: #9ca3af;
+            margin-top: 12px;
+            padding-top: 8px;
+            border-top: 1px solid #f3f4f6;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .data-row {
+                grid-template-columns: 1fr;
+            }
+
+            .data-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .alert-data {
+                grid-template-columns: 1fr;
+            }
+
+            .connection-indicator {
+                bottom: 80px;
+            }
         }
     </style>
 </head>
-<body class="bg-gray-100">
-    <!-- 导航栏 -->
-    <nav class="bg-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center space-x-4">
-                    <i class="fas fa-fire text-red-500 text-2xl"></i>
-                    <h1 class="text-xl font-bold text-gray-800">ESP32火灾报警系统</h1>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <a href="/" class="text-gray-600 hover:text-gray-800 px-3 py-2 rounded-md text-sm font-medium">
-                        <i class="fas fa-home mr-1"></i>首页
-                    </a>
-                    <a href="/dashboard" class="text-gray-600 hover:text-gray-800 px-3 py-2 rounded-md text-sm font-medium">
-                        <i class="fas fa-chart-line mr-1"></i>仪表板
-                    </a>
-                    <a href="/monitor" class="bg-blue-500 text-white px-3 py-2 rounded-md text-sm font-medium">
-                        <i class="fas fa-satellite-dish mr-1"></i>实时监控
-                    </a>
-                </div>
-            </div>
-        </div>
-    </nav>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <header class="header">
+            <h1><i class="fas fa-microchip"></i> 从机数据监控</h1>
+            <p>ESP32从机设备实时监控和状态分析</p>
+        </header>
 
-    <div class="container mx-auto px-4 py-6">
-        <!-- 统计信息 -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-            <div class="bg-white rounded-lg shadow p-6 sensor-card">
-                <div class="flex items-center">
-                    <div class="p-3 rounded-full bg-blue-100 text-blue-600">
-                        <i class="fas fa-microchip text-2xl"></i>
+        <!-- 从机统计信息 -->
+        <section class="system-stats">
+            <h2><i class="fas fa-chart-pie"></i> 从机状态统计</h2>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-microchip"></i>
                     </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-600">在线设备</p>
-                        <p class="text-2xl font-semibold text-gray-900" id="deviceCount">0</p>
+                    <div class="stat-content">
+                        <h4>在线从机</h4>
+                        <p class="stat-value" id="slaveCount">0</p>
                     </div>
                 </div>
-            </div>
 
-            <div class="bg-white rounded-lg shadow p-6 sensor-card">
-                <div class="flex items-center">
-                    <div class="p-3 rounded-full bg-green-100 text-green-600">
-                        <i class="fas fa-check-circle text-2xl"></i>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-check-circle"></i>
                     </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-600">正常状态</p>
-                        <p class="text-2xl font-semibold text-gray-900" id="normalCount">0</p>
+                    <div class="stat-content">
+                        <h4>正常状态</h4>
+                        <p class="stat-value" id="normalCount">0</p>
                     </div>
                 </div>
-            </div>
 
-            <div class="bg-white rounded-lg shadow p-6 sensor-card">
-                <div class="flex items-center">
-                    <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
-                        <i class="fas fa-exclamation-triangle text-2xl"></i>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
                     </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-600">警告状态</p>
-                        <p class="text-2xl font-semibold text-gray-900" id="warningCount">0</p>
+                    <div class="stat-content">
+                        <h4>警告状态</h4>
+                        <p class="stat-value" id="warningCount">0</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h4>警报状态</h4>
+                        <p class="stat-value" id="alarmCount">0</p>
                     </div>
                 </div>
             </div>
+        </section>
 
-            <div class="bg-white rounded-lg shadow p-6 sensor-card">
-                <div class="flex items-center">
-                    <div class="p-3 rounded-full bg-red-100 text-red-600">
-                        <i class="fas fa-exclamation-circle text-2xl"></i>
+        <!-- 从机实时数据显示 -->
+        <section class="data-section">
+            <div class="data-row">
+                <!-- 从机实时传感器数据 -->
+                <div class="data-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-microchip"></i> 从机实时传感器数据</h3>
+                        <p>从机设备的最新传感器数据包</p>
                     </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-600">警报状态</p>
-                        <p class="text-2xl font-semibold text-gray-900" id="alarmCount">0</p>
+                    <div class="card-content">
+                        <div id="slaveRealTimeData" class="data-container">
+                            <div class="no-data">
+                                <i class="fas fa-microchip"></i>
+                                <p>等待从机MQTT数据...</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- 实时数据显示 -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- 实时数据流 -->
-            <div class="bg-white rounded-lg shadow">
-                <div class="px-6 py-4 border-b border-gray-200">
-                    <h3 class="text-lg font-medium text-gray-900">
-                        <i class="fas fa-stream mr-2 text-blue-500"></i>实时数据流
-                    </h3>
-                    <p class="text-sm text-gray-600">最新的传感器数据包</p>
-                </div>
-                <div class="p-6">
-                    <div id="realTimeData" class="space-y-4 max-h-96 overflow-y-auto">
-                        <div class="text-center text-gray-500 py-8">
-                            <i class="fas fa-satellite-dish text-4xl mb-4"></i>
-                            <p>等待MQTT数据...</p>
+                <!-- 从机警报信息 -->
+                <div class="data-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-bell"></i> 从机警报信息</h3>
+                        <p>从机设备的最近警报记录</p>
+                    </div>
+                    <div class="card-content">
+                        <div id="slaveAlertData" class="data-container">
+                            <div class="no-data">
+                                <i class="fas fa-shield-alt"></i>
+                                <p>暂无从机警报信息</p>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+        </section>
 
-            <!-- 警报信息 -->
-            <div class="bg-white rounded-lg shadow">
-                <div class="px-6 py-4 border-b border-gray-200">
-                    <h3 class="text-lg font-medium text-gray-900">
-                        <i class="fas fa-bell mr-2 text-red-500"></i>警报信息
-                    </h3>
-                    <p class="text-sm text-gray-600">最近的警报记录</p>
-                </div>
-                <div class="p-6">
-                    <div id="alertData" class="space-y-4 max-h-96 overflow-y-auto">
-                        <div class="text-center text-gray-500 py-8">
-                            <i class="fas fa-shield-alt text-4xl mb-4"></i>
-                            <p>暂无警报信息</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- 从机设备状态 -->
+        <section class="devices-section">
+            <h2><i class="fas fa-network-wired"></i> 从机设备状态</h2>
+            <p>所有从机设备的实时状态监控</p>
 
-        <!-- 设备状态 -->
-        <div class="mt-6 bg-white rounded-lg shadow">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900">
-                    <i class="fas fa-server mr-2 text-green-500"></i>设备状态
-                </h3>
-                <p class="text-sm text-gray-600">所有连接设备的实时状态</p>
-            </div>
-            <div class="p-6">
-                <div id="deviceStatus" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div class="text-center text-gray-500 py-8 col-span-full">
-                        <i class="fas fa-network-wired text-4xl mb-4"></i>
-                        <p>正在加载设备状态...</p>
-                    </div>
+            <div class="devices-grid" id="slaveDeviceStatus">
+                <div class="no-data">
+                    <i class="fas fa-network-wired"></i>
+                    <p>正在加载从机设备状态...</p>
                 </div>
             </div>
-        </div>
+        </section>
     </div>
 
+    <!-- 统一底部导航栏 -->
+    {% include 'navigation.html' %}
+
     <!-- 连接状态指示器 -->
-    <div class="fixed bottom-4 right-4">
-        <div id="connectionStatus" class="bg-gray-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center">
-            <div class="w-2 h-2 bg-gray-300 rounded-full mr-2"></div>
-            <span class="text-sm">连接中...</span>
+    <div class="connection-indicator">
+        <div id="connectionStatus" class="connection-status connecting">
+            <div class="status-dot connecting"></div>
+            <span>连接中...</span>
         </div>
     </div>
 
@@ -201,76 +501,82 @@
             const span = indicator.querySelector('span');
 
             if (status === 'connected') {
-                indicator.className = 'bg-green-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center pulse';
-                dot.className = 'w-2 h-2 bg-green-300 rounded-full mr-2';
+                indicator.className = 'connection-status connected';
+                dot.className = 'status-dot connected';
             } else {
-                indicator.className = 'bg-red-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center';
-                dot.className = 'w-2 h-2 bg-red-300 rounded-full mr-2';
+                indicator.className = 'connection-status disconnected';
+                dot.className = 'status-dot disconnected';
             }
             span.textContent = text;
         }
 
-        // 处理实时传感器数据
+        // 处理从机实时传感器数据
         socket.on('sensor_data', function(data) {
             messageCount++;
-            addRealTimeData(data);
-            updateStatistics();
+            // 只处理从机数据
+            if (data.device_id && data.device_id.includes('slave')) {
+                addSlaveRealTimeData(data);
+            }
+            updateSlaveStatistics();
         });
 
         // 处理警报数据
         socket.on('alert_data', function(data) {
-            addAlertData(data);
-            updateStatistics();
+            // 只处理从机警报
+            if (data.device_id && data.device_id.includes('slave')) {
+                addSlaveAlertData(data);
+            }
+            updateSlaveStatistics();
         });
 
         // 处理设备状态更新
         socket.on('devices_update', function(devices) {
-            updateDeviceStatus(devices);
-            updateStatistics();
+            // 只更新从机设备状态
+            const slaveDevices = devices.filter(device => device.device_id && device.device_id.includes('slave'));
+            updateSlaveDeviceStatus(slaveDevices);
+            updateSlaveStatistics();
         });
 
-        // 添加实时数据显示
-        function addRealTimeData(data) {
-            const container = document.getElementById('realTimeData');
+        // 添加从机实时数据显示
+        function addSlaveRealTimeData(data) {
+            const container = document.getElementById('slaveRealTimeData');
             const timestamp = new Date(data.timestamp * 1000).toLocaleString('zh-CN');
 
             const dataCard = document.createElement('div');
-            dataCard.className = 'data-row bg-gray-50 rounded-lg p-4 border-l-4 border-blue-500';
+            dataCard.className = 'data-item sensor-data';
 
-            // 分析传感器状态
-            const flameStatus = getFlameStatus(data.flame);
-            const smokeStatus = getSmokeStatus(data.smoke);
-            const tempStatus = getTemperatureStatus(data.temperature);
-            const lightStatus = getLightStatus(data.light);
+            // 分析从机传感器状态（简化版）
+            const flameStatus = getSlaveFlameStatus(data.flame);
+            const smokeStatus = getSlaveSmokeStatus(data.smoke);
             const overallStatus = data.status || 'normal';
 
             dataCard.innerHTML = `
-                <div class="flex justify-between items-start mb-2">
-                    <span class="text-xs text-gray-500">${timestamp}</span>
-                    <span class="px-2 py-1 text-xs rounded-full ${getStatusClass(overallStatus)}">
+                <div class="data-header">
+                    <span class="data-time">${timestamp}</span>
+                    <span class="data-status ${getStatusClass(overallStatus)}">
                         ${getStatusText(overallStatus)}
                     </span>
                 </div>
-                <div class="grid grid-cols-2 gap-2 text-sm">
-                    <div class="flex items-center">
-                        <i class="fas fa-fire mr-2 ${flameStatus.iconColor}"></i>
+                <div class="data-grid">
+                    <div class="data-item-row">
+                        <i class="fas fa-fire ${flameStatus.iconColor}"></i>
                         <span>火焰: ${data.flame || 'N/A'} (${flameStatus.text})</span>
                     </div>
-                    <div class="flex items-center">
-                        <i class="fas fa-smog mr-2 ${smokeStatus.iconColor}"></i>
+                    <div class="data-item-row">
+                        <i class="fas fa-smog ${smokeStatus.iconColor}"></i>
                         <span>烟雾: ${data.smoke || 'N/A'} (${smokeStatus.text})</span>
                     </div>
-                    <div class="flex items-center">
-                        <i class="fas fa-thermometer-half mr-2 ${tempStatus.iconColor}"></i>
-                        <span>温度: ${data.temperature || 'N/A'}°C (${tempStatus.text})</span>
+                    <div class="data-item-row">
+                        <i class="fas fa-thermometer-half text-gray-500"></i>
+                        <span>温度: ${data.temperature || 'N/A'}°C</span>
                     </div>
-                    <div class="flex items-center">
-                        <i class="fas fa-lightbulb mr-2 ${lightStatus.iconColor}"></i>
-                        <span>光照: ${data.light || 'N/A'}lux (${lightStatus.text})</span>
+                    <div class="data-item-row">
+                        <i class="fas fa-tint text-gray-500"></i>
+                        <span>湿度: ${data.humidity || 'N/A'}%</span>
                     </div>
                 </div>
-                <div class="text-xs text-gray-600 mt-2">
-                    设备ID: ${data.device_id || 'unknown'}
+                <div class="data-device-id">
+                    从机ID: ${data.device_id || 'unknown'}
                 </div>
             `;
 
@@ -283,37 +589,38 @@
             }
         }
 
-        // 添加警报数据显示
-        function addAlertData(data) {
-            const container = document.getElementById('alertData');
+        // 添加从机警报数据显示
+        function addSlaveAlertData(data) {
+            const container = document.getElementById('slaveAlertData');
             const timestamp = new Date().toLocaleString('zh-CN');
 
             // 清空"暂无警报信息"
-            if (container.children.length === 1 && container.children[0].textContent.includes('暂无警报信息')) {
+            if (container.children.length === 1 && container.children[0].textContent.includes('暂无从机警报信息')) {
                 container.innerHTML = '';
             }
 
             const alertCard = document.createElement('div');
-            alertCard.className = 'data-row bg-red-50 rounded-lg p-4 border-l-4 border-red-500';
+            alertCard.className = 'data-item alert-data';
 
             alertCard.innerHTML = `
-                <div class="flex justify-between items-start mb-2">
-                    <span class="text-xs text-gray-500">${timestamp}</span>
-                    <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">
-                        ${data.level || 'high'} 级别
-                    </span>
+                <div class="alert-header">
+                    <span class="alert-time">${timestamp}</span>
+                    <span class="alert-type">从机警报</span>
                 </div>
-                <div class="text-sm font-medium text-red-800 mb-2">
-                    ${data.message || data.alert_type || '未知警报'}
+                <div class="alert-message">
+                    ${data.message || data.alert_type || '从机检测到异常'}
                 </div>
                 ${data.data ? `
-                    <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                    <div class="alert-data">
                         <div>火焰: ${data.data.flame || 'N/A'}</div>
                         <div>烟雾: ${data.data.smoke || 'N/A'}</div>
                         <div>温度: ${data.data.temperature || 'N/A'}°C</div>
-                        <div>光照: ${data.data.light || 'N/A'}lux</div>
+                        <div>湿度: ${data.data.humidity || 'N/A'}%</div>
                     </div>
                 ` : ''}
+                <div class="text-xs text-blue-600 mt-2">
+                    设备ID: ${data.device_id || 'unknown'}
+                </div>
             `;
 
             // 添加到顶部
@@ -325,81 +632,85 @@
             }
         }
 
-        // 更新设备状态
-        function updateDeviceStatus(devices) {
-            const container = document.getElementById('deviceStatus');
+        // 更新从机设备状态
+        function updateSlaveDeviceStatus(devices) {
+            const container = document.getElementById('slaveDeviceStatus');
             container.innerHTML = '';
+
+            if (devices.length === 0) {
+                container.innerHTML = `
+                    <div class="no-data">
+                        <i class="fas fa-microchip"></i>
+                        <p>暂无从机设备数据</p>
+                    </div>
+                `;
+                return;
+            }
 
             devices.forEach(device => {
                 const deviceCard = document.createElement('div');
-                deviceCard.className = 'sensor-card bg-white border rounded-lg p-4';
+                deviceCard.className = 'device-card';
 
                 const statusClass = device.status === '警报' ? 'status-alarm' :
                                   device.status === '警告' ? 'status-warning' : 'status-normal';
 
                 deviceCard.innerHTML = `
-                    <div class="flex items-center justify-between mb-3">
-                        <h4 class="font-medium text-gray-900">${device.location || device.device_id}</h4>
-                        <span class="px-2 py-1 text-xs text-white rounded-full ${statusClass}">
+                    <div class="device-header">
+                        <h4 class="device-name">${device.location || device.device_id}</h4>
+                        <span class="device-status ${statusClass}">
                             ${device.status}
                         </span>
                     </div>
-                    <div class="space-y-2 text-sm">
-                        <div class="flex justify-between">
-                            <span class="text-gray-600">温度:</span>
-                            <span class="font-medium">${device.temperature}°C</span>
+                    <div class="device-data">
+                        <div class="data-row-item">
+                            <span class="data-label">温度:</span>
+                            <span class="data-value">${device.temperature}°C</span>
                         </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-600">湿度:</span>
-                            <span class="font-medium">${device.humidity}%</span>
+                        <div class="data-row-item">
+                            <span class="data-label">湿度:</span>
+                            <span class="data-value">${device.humidity}%</span>
                         </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-600">烟雾:</span>
-                            <span class="font-medium">${device.smoke_level}</span>
+                        <div class="data-row-item">
+                            <span class="data-label">烟雾:</span>
+                            <span class="data-value">${device.smoke}</span>
                         </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-600">火焰:</span>
-                            <span class="font-medium">${device.flame}</span>
+                        <div class="data-row-item">
+                            <span class="data-label">火焰:</span>
+                            <span class="data-value">${device.flame || 'N/A'}</span>
                         </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-600">光照:</span>
-                            <span class="font-medium">${device.light_level}lux</span>
+                        <div class="data-row-item">
+                            <span class="data-label">光照:</span>
+                            <span class="data-value">${device.light_level}lux</span>
                         </div>
                     </div>
-                    <div class="text-xs text-gray-500 mt-3">
-                        更新时间: ${new Date(device.last_update * 1000).toLocaleString('zh-CN')}
+                    <div class="device-update-time">
+                        最后更新: ${new Date(device.last_update * 1000).toLocaleString('zh-CN')}
                     </div>
                 `;
 
                 container.appendChild(deviceCard);
             });
-
-            if (devices.length === 0) {
-                container.innerHTML = `
-                    <div class="text-center text-gray-500 py-8 col-span-full">
-                        <i class="fas fa-server text-4xl mb-4"></i>
-                        <p>暂无设备数据</p>
-                    </div>
-                `;
-            }
         }
 
         // 更新统计信息
-        function updateStatistics() {
-            fetch('/api/devices')
+        function updateSlaveStatistics() {
+            fetch('/api/slaves/realtime')
                 .then(response => response.json())
-                .then(devices => {
-                    const normalCount = devices.filter(d => d.status === '正常').length;
-                    const warningCount = devices.filter(d => d.status === '警告').length;
-                    const alarmCount = devices.filter(d => d.status === '警报').length;
+                .then(slaves => {
+                    const normalCount = slaves.filter(d => d.status === '正常').length;
+                    const warningCount = slaves.filter(d => d.status === '警告').length;
+                    const alarmCount = slaves.filter(d => d.status === '警报').length;
 
-                    document.getElementById('deviceCount').textContent = devices.length;
+                    document.getElementById('slaveCount').textContent = slaves.length;
                     document.getElementById('normalCount').textContent = normalCount;
                     document.getElementById('warningCount').textContent = warningCount;
                     document.getElementById('alarmCount').textContent = alarmCount;
+
+                    // 更新从机设备列表
+                    updateSlaveDeviceStatus(slaves);
                 })
                 .catch(error => {
-                    console.error('获取统计数据失败:', error);
+                    console.error('获取从机统计数据失败:', error);
                 });
         }
 
@@ -444,11 +755,24 @@
             }
         }
 
+        // 从机专用传感器状态分析函数
+        function getSlaveFlameStatus(value) {
+            if (value < 500) return { text: '警报', iconColor: 'text-red-500' };
+            if (value < 1000) return { text: '警告', iconColor: 'text-yellow-500' };
+            return { text: '正常', iconColor: 'text-green-500' };
+        }
+
+        function getSlaveSmokeStatus(value) {
+            if (value < 1000) return { text: '警报', iconColor: 'text-red-500' };
+            if (value < 1300) return { text: '警告', iconColor: 'text-yellow-500' };
+            return { text: '正常', iconColor: 'text-green-500' };
+        }
+
         // 定期刷新统计数据
-        setInterval(updateStatistics, 5000);
+        setInterval(updateSlaveStatistics, 5000);
 
         // 初始化统计数据
-        updateStatistics();
+        updateSlaveStatistics();
     </script>
 </body>
 </html>

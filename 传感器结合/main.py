@@ -12,6 +12,7 @@ import network
 import socket
 from machine import SoftI2C
 import ssd1306
+import dht
 
 def test_network_connectivity(server, port):
     """测试网络连通性"""
@@ -65,7 +66,7 @@ MQTT_SERVER = "22.tcp.cpolar.top"
 MQTT_PORT = 11390
 
 # GPIO配置（用户指定接口）
-DHT11_PIN = 4
+dht_sensor = dht.DHT11(Pin(4))
 FLAME_DO_PIN = 14  # 火焰传感器数字输入（0=有火，1=无火）
 MQ2_AO_PIN = 34   # MQ2烟雾传感器模拟输入
 MQ2_DO_PIN = 2    # MQ2烟雾传感器数字输入
@@ -784,74 +785,23 @@ def read_bh1750():
     except:
         return None
 
-def read_dht11():
-    """读取DHT11温湿度传感器"""
-    try:
-        from machine import Pin
-        import time
-        pin = Pin(4)
-        # 发送启动信号
-        pin.init(Pin.OUT)
-        pin.value(0)
-        time.sleep_ms(20)
-        pin.value(1)
+def read_dht11(max_retries=2, settle_ms=80, fallback=(26, 50)):
+    """轻量读取DHT11：用已创建的 dht_sensor，少量重试，失败回退到(26,50)。"""
+    for _ in range(max_retries):
+        try:
+            dht_sensor.measure()
+            time.sleep_ms(settle_ms)          # 给传感器一点稳定时间
+            t = dht_sensor.temperature()
+            h = dht_sensor.humidity()
+            if (t is not None) and (h is not None) and 0 <= t <= 50 and 0 <= h <= 100:
+                return t, h
+        except OSError:
+            pass
+        except Exception:
+            pass
+        time.sleep_ms(50)                     # 两次尝试间隔
+    return fallback
 
-        # 切换到输入模式并记录信号
-        pin.init(Pin.IN, Pin.PULL_UP)
-
-        changes = []
-        last_value = 1
-        last_time = time.ticks_us()
-
-        start_time = time.ticks_us()
-        while time.ticks_diff(time.ticks_us(), start_time) < 50000:
-            current_value = pin.value()
-            if current_value != last_value:
-                current_time = time.ticks_us()
-                duration = time.ticks_diff(current_time, last_time)
-                changes.append((last_value, duration))
-                last_value = current_value
-                last_time = current_time
-            time.sleep_us(1)
-
-        # 解析数据
-        if len(changes) < 10:
-            return 26, 50
-
-        bits = []
-        for i in range(2, len(changes), 2):
-            if i + 1 < len(changes):
-                high_duration = changes[i][1]
-                bit = 1 if high_duration > 50 else 0
-                bits.append(bit)
-                if len(bits) >= 40:
-                    break
-
-        if len(bits) < 40:
-            return 26, 50
-
-        # 转换为字节数据
-        data = bytearray(5)
-        for i in range(5):
-            for j in range(8):
-                data[i] = (data[i] << 1) | bits[i*8 + j]
-
-        # 校验和检查
-        checksum = (data[0] + data[1] + data[2] + data[3]) & 0xFF
-        if checksum != data[4]:
-            return 26, 50
-
-        # 返回温度和湿度
-        temperature = data[2]
-        humidity = data[0]
-
-        if 0 <= humidity <= 95 and 0 <= temperature <= 50:
-            return temperature, humidity
-        else:
-            return 26, 50
-    except:
-        # 如果读取失败，返回默认值
-        return 26, 50
 
 def check_fire_alarm(flame_analog, mq2_analog, temperature, light_level):
     """火灾检测算法 - 使用实际传感器读数"""
@@ -1400,3 +1350,4 @@ if __name__ == "__main__":
             mqtt_client.publish(f"esp32/{DEVICE_ID}/status/online", "0")
             mqtt_client.disconnect()
         print("系统已安全关闭")
+

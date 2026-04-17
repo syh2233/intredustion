@@ -1,14 +1,9 @@
-'''
-DHT11温湿度传感器 - 精简版本
-接线：DATA->GPIO4, VCC->5V, GND->GND
-'''
-
 from machine import Pin
 import time
 
 def read_dht11():
     """读取DHT11温湿度数据"""
-    pin = Pin(4)
+    pin = Pin(14)
 
     # 发送启动信号
     pin.init(Pin.OUT)

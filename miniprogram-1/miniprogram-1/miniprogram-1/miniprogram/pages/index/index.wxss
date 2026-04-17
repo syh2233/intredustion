@@ -1,0 +1,224 @@
+.container {
+  padding: 16px;
+  background-color: #f5f7fa;
+  min-height: 100vh;
+}
+
+/* 设备头部样式 */
+.device-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: white;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.device-name {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+}
+
+.online-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.status-indicator.online { background-color: #00b42a; }
+.status-indicator.offline { background-color: #f53f3f; }
+
+.status-text {
+  font-size: 14px;
+  color: #666;
+}
+
+.overall-status {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.overall-status.normal { background-color: #eaffea; color: #00b42a; }
+.overall-status.warning { background-color: #fff7e6; color: #ff7d00; }
+.overall-status.alarm { background-color: #ffebeb; color: #f53f3f; }
+
+/* 传感器网格布局 */
+.sensor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.sensor-card {
+  background-color: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sensor-card.normal { border-left: 4px solid #00b42a; }
+.sensor-card.warning { border-left: 4px solid #ff7d00; }
+.sensor-card.alarm { border-left: 4px solid #f53f3f; }
+
+.sensor-icon { font-size: 24px; }
+
+.sensor-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sensor-name { font-size: 16px; color: #666; }
+.sensor-value { font-size: 18px; font-weight: bold; color: #333; }
+
+.sensor-status {
+  font-size: 12px;
+  color: #ff4d4f;
+  margin-left: 5px;
+}
+
+.sensor-debug {
+  font-size: 10px;
+  color: #999;
+  margin-top: 5px;
+  font-style: italic;
+}
+.sensor-threshold { font-size: 12px; color: #999; }
+
+/* 控制区域样式 */
+.control-section {
+  background-color: white;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 16px;
+  display: block;
+}
+
+.control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.control-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+}
+
+.control-name { font-size: 16px; color: #333; font-weight: 500; }
+.control-icon { font-size: 32px; color: #999; }
+
+.control-icon.active {
+  color: #1677ff;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.control-button {
+  width: 100%;
+  padding: 8px 0;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.control-button.off { background-color: #f1f1f1; color: #333; }
+.control-button.on { background-color: #1677ff; color: white; }
+
+.control-hint { font-size: 12px; color: #999; }
+.control-hint.active-hint { color: #1677ff; }
+
+/* 功能按钮区域 */
+.action-buttons {
+  display: flex;
+  gap: 16px;
+}
+
+.alarm-button, .history-button, .intelligence-button, .settings-button, .slave-data-button {
+  flex: 1;
+  padding: 12px 0;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.alarm-button { 
+  background-color: #fff1f0; 
+  color: #f53f3f; 
+  position: relative; 
+}
+.history-button {
+  background-color: #f0f7ff;
+  color: #0066cc;
+}
+.intelligence-button {
+  background-color: #f6f0ff;
+  color: #722ed1;
+}
+.settings-button {
+  background-color: #e6f7ff;
+  color: #1890ff;
+}
+.slave-data-button { 
+  background-color: #f0f0f0; 
+  color: #333; 
+}
+
+.unhandled-badge {
+  position: absolute;
+  top: -6px;
+  right: 25%;
+  background-color: #f53f3f;
+  color: white;
+  font-size: 12px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+

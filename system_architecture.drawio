@@ -1,0 +1,85 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0" version="29.2.10">
+  <diagram id="CDn6YUiWLHY5w79nlC12" name="第 1 页">
+    <mxGraphModel dx="1064" dy="984" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=16;" value="应用层 (Application Layer)" vertex="1">
+          <mxGeometry height="150" width="720" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="3" parent="2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=16;" value="Web 监控端" vertex="1">
+          <mxGeometry height="60" width="140" x="150" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="4" parent="2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=16;" value="微信小程序" vertex="1">
+          <mxGeometry height="60" width="140" x="430" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="5" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=16;" value="平台层 (Platform Layer)" vertex="1">
+          <mxGeometry height="200" width="720" x="40" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="6" parent="5" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontStyle=1;fontSize=16;" value="Flask 核心服务" vertex="1">
+          <mxGeometry height="60" width="140" x="290" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="7" parent="5" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=16;" value="CNN+LSTM AI模型" vertex="1">
+          <mxGeometry height="60" width="140" x="60" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="8" parent="5" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=16;" value="SQLite 数据库" vertex="1">
+          <mxGeometry height="80" width="100" x="550" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="9" parent="5" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;dashed=1;fontSize=16;" value="WebSocket 推送服务" vertex="1">
+          <mxGeometry height="40" width="140" x="290" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="22" edge="1" parent="5" source="6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fontSize=16;" target="7" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="23" edge="1" parent="5" source="6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=16;" target="8" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="24" edge="1" parent="5" source="6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=16;" target="9" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="10" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#f8cecc;strokeColor=#b85450;fontSize=16;" value="网络层 (Network Layer)" vertex="1">
+          <mxGeometry height="150" width="720" x="40" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="11" parent="10" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=16;" value="Mosquitto MQTT 代理" vertex="1">
+          <mxGeometry height="60" width="160" x="430" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="12" parent="10" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=16;" value="WiFi 路由/网关" vertex="1">
+          <mxGeometry height="60" width="140" x="150" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="20" edge="1" parent="10" source="12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=16;" target="11" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="13" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=16;" value="感知层 (Perception Layer)" vertex="1">
+          <mxGeometry height="150" width="720" x="40" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="14" parent="13" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontStyle=1;fontSize=16;" value="ESP32 主控器" vertex="1">
+          <mxGeometry height="60" width="140" x="290" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="15" parent="13" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=16;" value="传感器组&#xa;(烟雾/火焰/温湿度)" vertex="1">
+          <mxGeometry height="60" width="140" x="60" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="16" parent="13" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=16;" value="执行器&#xa;(舵机/蜂鸣器)" vertex="1">
+          <mxGeometry height="60" width="140" x="530" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="17" edge="1" parent="13" source="15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=16;" target="14" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="18" edge="1" parent="13" source="14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=16;" target="16" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="19" edge="1" parent="1" source="14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;exitX=0.25;exitY=0;fontSize=16;" target="12" value="MQTT发布">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="21" edge="1" parent="1" source="11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;entryX=0.75;entryY=1;fontSize=16;" target="6" value="订阅/发布">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="25" edge="1" parent="1" source="6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.25;exitY=0;entryX=0.5;entryY=1;fontSize=16;" target="3" value="WebSocket">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="26" edge="1" parent="1" source="6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.75;exitY=0;entryX=0.5;entryY=1;fontSize=16;" target="4" value="HTTPS">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

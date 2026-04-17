@@ -1,0 +1,1848 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能分析中心 - ESP32火灾报警系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* 智能分析页面专用样式 - 参考小程序设计 */
+        body {
+            background: linear-gradient(180deg, #f0f4ff 0%, #e6f7ff 100%);
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+
+        .intelligence-container {
+            width: 100%;
+            padding: 10px 0;
+            box-sizing: border-box;
+            margin: 0;
+            max-width: none;
+        }
+
+        /* 智能横幅 - 与2x2网格保持一致的居中布局 */
+        .intelligence-banner {
+            position: relative;
+            margin: 10px auto 20px auto; /* 水平居中 */
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            animation: shimmer 3s infinite;
+            max-width: 75%; /* 与网格保持一致，占6/8宽度 */
+            width: 1200px; /* 与网格保持一致 */
+        }
+
+        @keyframes shimmer {
+            0% { box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3); }
+            50% { box-shadow: 0 8px 40px rgba(102, 126, 234, 0.4); }
+            100% { box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3); }
+        }
+
+        .banner-content {
+            display: flex;
+            align-items: center;
+            padding: 25px 30px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .banner-icon {
+            font-size: 3rem;
+            color: #fff;
+            margin-right: 25px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .banner-text {
+            flex: 1;
+            color: white;
+        }
+
+        .banner-text h1 {
+            font-size: 2rem;
+            margin-bottom: 8px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .banner-text p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+            margin: 0;
+        }
+
+        .banner-refresh {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .banner-refresh:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        .banner-refresh:active {
+            transform: scale(0.95);
+        }
+
+        /* 状态栏 - 1/3+1/3+1/3布局，两边各留1/3空白 */
+        .status-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 2rem;
+            margin: 0 auto 15px auto; /* 水平居中 */
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            max-width: 33.33%; /* 中间占1/3宽度 */
+            width: 600px; /* 固定最大宽度 */
+            padding: 0.5rem 1rem; /* 紧凑的内边距 */
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem; /* 与首页相同的间距 */
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+
+        .status-text, .last-update {
+            font-size: 14px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .intelligence-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 15px;
+            margin: 0 20px 15px 20px;
+            width: calc(100% - 40px);
+            box-sizing: border-box;
+        }
+
+        /* 2x2 网格布局 - 两侧各留1/8空白，中间占6/8 */
+        .cards-grid-2x2 {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-width: 75%; /* 内容区域占6/8(75%)宽度 */
+            margin: 0 auto 15px auto; /* 水平居中，实现两侧各留1/8空白 */
+            width: 1200px; /* 固定最大宽度，确保卡片不会太宽 */
+            box-sizing: border-box;
+        }
+
+        .cards-grid-2x2 .cards-row {
+            display: flex;
+            gap: 15px;
+            margin: 0;
+            width: 100%;
+        }
+
+        .cards-grid-2x2 .cards-row .intelligence-card {
+            flex: 1;
+            margin: 0;
+            width: auto;
+            min-width: 0; /* 防止flex溢出 */
+        }
+
+        /* 并排卡片布局 - 健康度和安全指数 */
+        .cards-row {
+            display: flex;
+            gap: 15px;
+            margin: 0 20px 15px 20px;
+            width: calc(100% - 40px);
+            box-sizing: border-box;
+        }
+
+        .cards-row .intelligence-card {
+            flex: 1;
+            margin: 0;
+            width: auto;
+        }
+
+        .intelligence-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(102, 126, 234, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .intelligence-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+        }
+
+        .intelligence-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        /* AI建议卡片特殊样式 - 在2x2网格中正常显示 */
+        .intelligence-card.ai-card {
+            /* AI卡片在2x2网格中不再特殊处理，与其他卡片保持一致 */
+        }
+
+        .intelligence-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+        }
+
+        .card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-size: 1.2rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .health-icon {
+            background: linear-gradient(135deg, #4CAF50, #8BC34A);
+            color: white;
+        }
+
+        .safety-icon {
+            background: linear-gradient(135deg, #2196F3, #03A9F4);
+            color: white;
+        }
+
+        .trends-icon {
+            background: linear-gradient(135deg, #FF9800, #FFC107);
+            color: white;
+        }
+
+        .ai-icon {
+            background: linear-gradient(135deg, #9C27B0, #E91E63);
+            color: white;
+        }
+
+        .card-title {
+            flex: 1;
+        }
+
+        .card-title h3 {
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .card-title p {
+            color: #666;
+            font-size: 0.85rem;
+            margin: 0;
+        }
+
+        .score-display {
+            text-align: center;
+            margin: 15px 0;
+        }
+
+        .score-circle {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            margin: 0 auto 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: white;
+            position: relative;
+            background: conic-gradient(var(--score-color) 0deg, var(--score-color) calc(var(--score) * 3.6deg), #e0e0e0 calc(var(--score) * 3.6deg));
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .score-circle::before {
+            content: '';
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: white;
+        }
+
+        .score-circle span {
+            position: relative;
+            z-index: 1;
+            color: #333;
+        }
+
+        .score-status {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .score-description {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .factors-list {
+            margin-top: 20px;
+        }
+
+        .factor-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .factor-item:last-child {
+            border-bottom: none;
+        }
+
+        .factor-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .factor-score {
+            display: flex;
+            align-items: center;
+        }
+
+        .factor-bar {
+            width: 100px;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            margin-right: 10px;
+            overflow: hidden;
+        }
+
+        .factor-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .factor-value {
+            font-weight: 600;
+            color: #333;
+            min-width: 35px;
+            text-align: right;
+        }
+
+        .trend-chart {
+            margin-top: 20px;
+            height: 250px;
+        }
+
+        /* AI建议容器样式 - 自适应宽度并居中 */
+        .ai-suggestions-container {
+            width: 100%;
+            max-width: 900px; /* 限制容器最大宽度，与卡片宽度协调 */
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            padding: 0;
+            margin: 0 auto; /* 容器居中 */
+        }
+
+        .priority-section {
+            width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center; /* 让整个优先级区域的内容居中 */
+            margin: 10px 0; /* 添加上下间距 */
+        }
+
+        .priority-section h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center; /* 标题居中 */
+            gap: 8px;
+            text-align: center;
+        }
+
+        .priority-section.high-priority h4 {
+            color: #f44336;
+        }
+
+        .priority-section.medium-priority h4 {
+            color: #ff9800;
+        }
+
+        .priority-section.low-priority h4 {
+            color: #4caf50;
+        }
+
+        /* 建议卡片网格布局 - 在自适应母卡片中显示建议 */
+        .suggestions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 260px)); /* 调整最大宽度适应新的母卡片 */
+            gap: 12px;
+            width: 100%;
+            max-width: 700px; /* 调整最大宽度以适应自适应母卡片 */
+            height: 100%;
+            justify-items: center; /* 让网格项居中显示 */
+            justify-content: center; /* 整个网格居中 */
+            margin: 0 auto; /* 水平居中网格容器 */
+        }
+
+        /* 响应式布局调整 - 适应自适应母卡片 */
+        @media (min-width: 1400px) {
+            .suggestions-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 280px));
+                max-width: 650px; /* 调整最大宽度适应自适应母卡片 */
+                margin: 0 auto; /* 水平居中 */
+            }
+        }
+
+        @media (min-width: 1201px) and (max-width: 1399px) {
+            .suggestions-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 280px));
+                max-width: 600px; /* 调整最大宽度适应自适应母卡片 */
+                margin: 0 auto;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .suggestions-grid {
+                grid-template-columns: repeat(auto-fit, minmax(180px, 260px));
+                max-width: 550px; /* 调整最大宽度适应自适应母卡片 */
+                margin: 0 auto;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .suggestions-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .suggestions-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .suggestion-card {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 10px;
+            padding: 12px 10px;
+            border-left: 4px solid var(--priority-color);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #e0e0e0;
+            min-width: 0; /* 防止内容溢出 */
+            max-width: 280px; /* 限制最大宽度 */
+            width: 100%; /* 确保在限制宽度内填充 */
+        }
+
+        .suggestion-card.high-priority {
+            --priority-color: #f44336;
+            background: linear-gradient(135deg, #ffebee, #f8f9fa);
+        }
+
+        .suggestion-card.medium-priority {
+            --priority-color: #ff9800;
+            background: linear-gradient(135deg, #fff3e0, #f8f9fa);
+        }
+
+        .suggestion-card.low-priority {
+            --priority-color: #4caf50;
+            background: linear-gradient(135deg, #e8f5e8, #f8f9fa);
+        }
+
+
+        .suggestion-content {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            height: 100%;
+        }
+
+        .suggestion-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .suggestion-header i {
+            color: var(--priority-color);
+            margin-top: 2px;
+            flex-shrink: 0;
+            font-size: 1rem;
+        }
+
+        .suggestion-text {
+            font-weight: 600;
+            color: #333;
+            line-height: 1.2;
+            font-size: 0.8rem;
+            flex: 1;
+            word-wrap: break-word;
+        }
+
+        .suggestion-reason {
+            display: none; /* 在小卡片中隐藏理由以节省空间 */
+        }
+
+        .suggestion-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: auto;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.75rem;
+            color: #666;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 3px 6px;
+            border-radius: 4px;
+        }
+
+        .meta-item i {
+            color: #2196F3;
+            font-size: 0.75rem;
+        }
+
+        .meta-item span {
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        /* 成本星级样式 */
+        .meta-item .fa-star {
+            color: #ffc107;
+        }
+
+        .meta-item .far.fa-star {
+            color: #e0e0e0;
+        }
+
+        /* 错误和空状态样式 */
+        .ai-error, .no-suggestions {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .ai-error i, .no-suggestions i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.6;
+        }
+
+        .ai-error i {
+            color: #f44336;
+        }
+
+        .no-suggestions i {
+            color: #2196F3;
+        }
+
+        .ai-error p, .no-suggestions p {
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+        }
+
+        .ai-error small, .no-suggestions small {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .device-selector {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 0 auto 25px auto; /* 水平居中 */
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            max-width: 75%; /* 与网格保持一致，占6/8宽度 */
+            width: 1200px; /* 与网格保持一致 */
+        }
+
+        .device-selector select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.3s ease;
+        }
+
+        .device-selector select:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+
+        .statistics-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 12px;
+            margin-top: 15px;
+            width: 100%;
+        }
+
+        @media (max-width: 1200px) {
+            .statistics-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 10px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .statistics-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .statistics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 12px;
+            padding: 12px 8px;
+            text-align: center;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(102, 126, 234, 0.1);
+            min-width: 0;
+        }
+
+        .stat-card:hover {
+            background: linear-gradient(135deg, #e6f7ff, #bae7ff);
+            transform: scale(0.98);
+        }
+
+        .stat-value {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #2196F3;
+            margin-bottom: 6px;
+            display: block;
+            line-height: 1.2;
+            word-wrap: break-word;
+        }
+
+        .stat-value.excellent {
+            color: #4CAF50;
+        }
+
+        .stat-value.good {
+            color: #8BC34A;
+        }
+
+        .stat-value.moderate {
+            color: #FF9800;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            line-height: 1.2;
+            word-wrap: break-word;
+        }
+
+        /* 在较小屏幕上调整字体大小 */
+        @media (max-width: 1400px) {
+            .stat-value {
+                font-size: 1.2rem;
+            }
+            .stat-label {
+                font-size: 0.7rem;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .stat-value {
+                font-size: 1.3rem;
+            }
+            .stat-label {
+                font-size: 0.75rem;
+            }
+        }
+
+        .loading-spinner {
+          min-height: 200px;
+          height: auto;     /* 允许随内容自然增高 */
+        }
+
+        .loading-spinner i {
+            margin-right: 10px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #2196F3, #03A9F4);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-top: 15px;
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(33, 150, 243, 0.3);
+        }
+
+        .refresh-btn:active {
+            transform: translateY(0);
+        }
+
+        /* 颜色变量 */
+        .excellent { --score-color: #4CAF50; color: #4CAF50; }
+        .good { --score-color: #8BC34A; color: #8BC34A; }
+        .moderate { --score-color: #FF9800; color: #FF9800; }
+        .poor { --score-color: #f44336; color: #f44336; }
+        .critical { --score-color: #d32f2f; color: #d32f2f; }
+
+        .excellent-bg { background: #4CAF50; }
+        .good-bg { background: #8BC34A; }
+        .moderate-bg { background: #FF9800; }
+        .poor-bg { background: #f44336; }
+        .critical-bg { background: #d32f2f; }
+
+        /* 让“AI智能建议”卡片占满整行（与系统统计概览同宽） */
+        .ai-card {
+            grid-column: 1 / -1;
+        }
+
+
+        /* 导航栏样式已移至统一模板，避免重复定义 */
+
+        /* 子卡片紧凑版 */
+        .suggestions-grid{
+          align-items: start;               /* 不强制同高 */
+          grid-auto-rows: minmax(110px, auto);
+          gap: 10px;
+        }
+        .suggestion-card{
+          height: auto !important;          /* 覆盖 height:100% */
+          min-height: 120px;
+          padding: 10px 10px;
+        }
+        .suggestion-header{ margin-bottom: 8px; }
+        .suggestion-text{
+          font-size: 14px;
+          line-height: 1.4;
+          margin: 4px 0 8px;
+        }
+        .suggestion-meta{
+          margin-top: auto;                 /* meta 仍然贴底 */
+          gap: 8px;
+        }
+        .meta-item{
+          padding: 4px 8px;
+          font-size: 12px;
+          border-radius: 8px;
+        }
+        /* 响应式设计 */
+        @media (max-width: 1200px) {
+            .cards-row {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .intelligence-grid {
+                grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            .banner-content {
+                padding: 20px;
+            }
+
+            .banner-icon {
+                font-size: 2.5rem;
+            }
+
+            .banner-text h1 {
+                font-size: 1.5rem;
+            }
+
+            .banner-text p {
+                font-size: 0.9rem;
+            }
+
+            /* 在小屏幕上改为全宽布局 */
+            .cards-grid-2x2,
+            .intelligence-banner,
+            .status-bar,
+            .device-selector {
+                max-width: calc(100% - 20px);
+                width: calc(100% - 20px);
+                margin-left: 10px;
+                margin-right: 10px;
+            }
+
+            .cards-grid-2x2 .cards-row {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .cards-row {
+                margin-left: 10px;
+                margin-right: 10px;
+                width: calc(100% - 20px);
+            }
+
+            .intelligence-grid {
+                margin-left: 10px;
+                margin-right: 10px;
+                width: calc(100% - 20px);
+                grid-template-columns: 1fr;
+            }
+
+            .intelligence-banner,
+            .status-bar {
+                margin-left: 10px;
+                margin-right: 10px;
+                width: calc(100% - 20px);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .banner-content {
+                flex-direction: column;
+                text-align: center;
+                gap: 15px;
+            }
+
+            .banner-icon {
+                margin-right: 0;
+                margin-bottom: 10px;
+            }
+
+            .banner-refresh {
+                align-self: center;
+            }
+        }
+
+        /* 紧凑设计优化 */
+        .card-title{ font-size: 18px; }
+        .priority-section .section-title{ margin: 8px 0 10px; }
+    </style>
+</head>
+<body>
+    <div class="intelligence-container">
+        <!-- 智能横幅 - 参考小程序设计 -->
+        <div class="intelligence-banner">
+            <div class="banner-content">
+                <div class="banner-icon">
+                    <i class="fas fa-brain"></i>
+                </div>
+                <div class="banner-text">
+                    <h1>智能分析中心</h1>
+                    <p>AI驱动的设备健康分析、预测性维护和智能建议系统</p>
+                </div>
+                <button class="banner-refresh" onclick="refreshAllData()">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 状态栏 -->
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-dot"></div>
+                <span class="status-text">系统在线</span>
+            </div>
+            <div class="status-item">
+                <span class="last-update" id="lastUpdate">最后更新: --</span>
+            </div>
+        </div>
+
+        <!-- 设备选择器 -->
+        <div class="device-selector">
+            <select id="deviceSelector" onchange="switchDevice()">
+                <option value="all">所有设备汇总分析</option>
+            </select>
+        </div>
+
+      <!-- 2x2 网格布局 - 四张卡片两两并列 -->
+        <div class="cards-grid-2x2">
+            <!-- 第一行：设备健康度 + 环境安全指数 -->
+            <div class="cards-row">
+                <!-- 设备健康度卡片 -->
+                <div class="intelligence-card">
+                    <div class="card-header">
+                        <div class="card-icon health-icon">
+                            <i class="fas fa-heartbeat"></i>
+                        </div>
+                        <div class="card-title">
+                            <h3>设备健康度评估</h3>
+                            <p>实时健康度评分与分析</p>
+                        </div>
+                    </div>
+
+                    <div id="healthContent">
+                        <div class="score-display">
+                            <div class="score-circle" style="--score-color: #4CAF50;">
+                                <span id="healthScore">--</span>
+                            </div>
+                            <div id="healthStatus">评估中...</div>
+                        </div>
+
+                        <div class="statistics-grid" id="healthFactors">
+                            <div class="stat-card">
+                                <div class="stat-value">--</div>
+                                <div class="stat-label">数据完整性</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">--</div>
+                                <div class="stat-label">传感器稳定性</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">--</div>
+                                <div class="stat-label">运行一致性</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 环境安全指数卡片 -->
+                <div class="intelligence-card">
+                    <div class="card-header">
+                        <div class="card-icon safety-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <div class="card-title">
+                            <h3>环境安全指数</h3>
+                            <p>多维度环境质量评估</p>
+                        </div>
+                    </div>
+
+                    <div id="safetyContent">
+                        <div class="score-display">
+                            <div class="score-circle" style="--score-color: #2196F3;">
+                                <span id="safetyScore">--</span>
+                            </div>
+                            <div id="safetyLevel">评估中...</div>
+                        </div>
+
+                        <div class="statistics-grid" id="safetyFactors">
+                            <div class="stat-card">
+                                <div class="stat-value">--</div>
+                                <div class="stat-label">温度安全</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">--</div>
+                                <div class="stat-label">湿度安全</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">--</div>
+                                <div class="stat-label">空气质量</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第二行：传感器数据统计 + AI智能建议 -->
+            <div class="cards-row">
+                <!-- 传感器数据统计卡片 -->
+                <div class="intelligence-card">
+                    <div class="card-header">
+                        <div class="card-icon trends-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="card-title">
+                            <h3>传感器数据统计</h3>
+                            <p>传感器数据变化趋势</p>
+                        </div>
+                    </div>
+
+                    <div id="trendsContent">
+                        <div class="trend-chart">
+                            <canvas id="trendsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI智能建议卡片 -->
+                <div class="intelligence-card ai-card">
+                    <div class="card-header">
+                        <div class="card-icon ai-icon">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="card-title">
+                            <h3>AI智能建议</h3>
+                            <p>基于深度学习的维护建议</p>
+                        </div>
+                    </div>
+
+                    <div id="aiContent" class="loading-spinner">
+                        <i class="fas fa-spinner"></i>
+                        <span>加载中...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+      
+        <!-- 刷新按钮 -->
+        <div style="text-align: center; margin: 30px auto 0 auto; max-width: 75%; width: 1200px;">
+            <button class="refresh-btn" onclick="refreshAllData()">
+                <i class="fas fa-sync-alt"></i> 刷新所有数据
+            </button>
+        </div>
+    </div>
+
+  
+    <script>
+        // 全局变量
+        let socket;
+        let currentDeviceId = 'all';
+        let trendsChart = null;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSocket();
+            loadDeviceList();
+            loadAllData();
+
+            // 定时刷新数据
+            setInterval(refreshAllData, 30000); // 30秒刷新一次
+        });
+
+        // 初始化Socket.IO连接
+        function initializeSocket() {
+            socket = io();
+
+            socket.on('connect', function() {
+                console.log('Socket连接成功');
+            });
+
+            socket.on('intelligence_update', function(data) {
+                console.log('收到智能分析更新:', data);
+                if (data.device_id === currentDeviceId || (currentDeviceId === 'all' && !data.device_id)) {
+                    updateIntelligenceDisplay(data);
+                }
+            });
+
+            socket.on('intelligence_error', function(data) {
+                console.error('智能分析错误:', data.error);
+                showError('数据加载失败: ' + data.error);
+            });
+        }
+
+        // 加载设备列表
+        async function loadDeviceList() {
+            try {
+                const [devicesResponse, slavesResponse] = await Promise.all([
+                    fetch('/api/devices'),
+                    fetch('/api/slaves')
+                ]);
+
+                const devices = await devicesResponse.json();
+                const slaves = await slavesResponse.json();
+
+                const selector = document.getElementById('deviceSelector');
+                selector.innerHTML = '<option value="all">所有设备汇总分析</option>';
+
+                // 添加主机设备
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.device_id;
+                    option.textContent = `${device.device_id} - ${device.location || '未知位置'} (主机)`;
+                    selector.appendChild(option);
+                });
+
+                // 添加从机设备
+                slaves.forEach(slave => {
+                    const option = document.createElement('option');
+                    option.value = slave.device_id;
+                    option.textContent = `${slave.device_id} - ${slave.location || '未知位置'} (从机)`;
+                    selector.appendChild(option);
+                });
+            } catch (error) {
+                console.error('加载设备列表失败:', error);
+            }
+        }
+
+        // 切换设备
+        function switchDevice() {
+            const selector = document.getElementById('deviceSelector');
+            currentDeviceId = selector.value;
+            loadAllData();
+        }
+
+        // 加载所有数据
+        async function loadAllData() {
+            showLoading();
+
+            try {
+                if (currentDeviceId === 'all') {
+                    await Promise.all([
+                        loadSystemStatistics(),
+                        loadAllDevicesAnalysis()
+                    ]);
+                } else {
+                    await Promise.all([
+                        loadDeviceHealthScore(currentDeviceId),
+                        loadSafetyIndex(currentDeviceId),
+                        loadDeviceTrends(currentDeviceId),
+                        loadAISuggestions(currentDeviceId)
+                    ]);
+                }
+            } catch (error) {
+                console.error('加载数据失败:', error);
+                showError('数据加载失败，请重试');
+            }
+        }
+
+        // 加载系统统计信息
+        async function loadSystemStatistics() {
+            try {
+                const response = await fetch('/api/intelligence/statistics');
+                const stats = await response.json();
+
+                displaySystemStatistics(stats);
+            } catch (error) {
+                console.error('加载系统统计失败:', error);
+            }
+        }
+
+        // 显示系统统计信息
+        function displaySystemStatistics(stats) {
+            const container = document.getElementById('statisticsContent');
+
+            const html = `
+                <div class="statistics-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.total_devices}</div>
+                        <div class="stat-label">设备总数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.health_statistics.average}</div>
+                        <div class="stat-label">平均健康分</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.safety_statistics.average}</div>
+                        <div class="stat-label">平均安全指数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value ${stats.system_health}">${stats.system_health === 'excellent' ? '优秀' : stats.system_health === 'good' ? '良好' : '中等'}</div>
+                        <div class="stat-label">系统状态</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.health_statistics.excellent_count}</div>
+                        <div class="stat-label">健康设备</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.safety_statistics.very_safe_count}</div>
+                        <div class="stat-label">安全环境</div>
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        // 加载所有设备分析
+        async function loadAllDevicesAnalysis() {
+            try {
+                const response = await fetch('/api/intelligence/analysis');
+                const analysis = await response.json();
+
+                displayAllDevicesHealth(analysis);
+                displayAllDevicesSafety(analysis);
+                displaySystemRecommendations();
+            } catch (error) {
+                console.error('加载所有设备分析失败:', error);
+            }
+        }
+
+        // 显示所有设备健康度
+        function displayAllDevicesHealth(analysis) {
+            const container = document.getElementById('healthContent');
+
+            if (analysis.devices.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666;">暂无设备数据</p>';
+                return;
+            }
+
+            const avgHealth = analysis.summary.average_health_score;
+            const healthStatus = getHealthStatus(avgHealth);
+
+            const html = `
+                <div class="score-display">
+                    <div class="score-circle" style="--score: ${avgHealth}; --score-color: ${getScoreColor(avgHealth)}">
+                        <span>${avgHealth}</span>
+                    </div>
+                    <div class="score-status ${healthStatus}">${getHealthStatusText(healthStatus)}</div>
+                    <div class="score-description">系统平均健康评分</div>
+                </div>
+                <div class="factors-list">
+                    <div class="factor-item">
+                        <span class="factor-name">优秀设备</span>
+                        <div class="factor-score">
+                            <div class="factor-bar">
+                                <div class="factor-fill excellent-bg" style="width: ${(analysis.summary.health_distribution.excellent / analysis.devices.length) * 100}%"></div>
+                            </div>
+                            <span class="factor-value">${analysis.summary.health_distribution.excellent}</span>
+                        </div>
+                    </div>
+                    <div class="factor-item">
+                        <span class="factor-name">良好设备</span>
+                        <div class="factor-score">
+                            <div class="factor-bar">
+                                <div class="factor-fill good-bg" style="width: ${(analysis.summary.health_distribution.good / analysis.devices.length) * 100}%"></div>
+                            </div>
+                            <span class="factor-value">${analysis.summary.health_distribution.good}</span>
+                        </div>
+                    </div>
+                    <div class="factor-item">
+                        <span class="factor-name">需要关注</span>
+                        <div class="factor-score">
+                            <div class="factor-bar">
+                                <div class="factor-fill moderate-bg" style="width: ${(analysis.summary.health_distribution.moderate / analysis.devices.length) * 100}%"></div>
+                            </div>
+                            <span class="factor-value">${analysis.summary.health_distribution.moderate + analysis.summary.health_distribution.poor + analysis.summary.health_distribution.critical}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        // 显示所有设备安全指数
+        function displayAllDevicesSafety(analysis) {
+            const container = document.getElementById('safetyContent');
+
+            if (analysis.devices.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666;">暂无设备数据</p>';
+                return;
+            }
+
+            const avgSafety = analysis.summary.average_safety_index;
+            const safetyLevel = getSafetyLevel(avgSafety);
+
+            const html = `
+                <div class="score-display">
+                    <div class="score-circle" style="--score: ${avgSafety}; --score-color: ${getScoreColor(avgSafety)}">
+                        <span>${avgSafety}</span>
+                    </div>
+                    <div class="score-status ${safetyLevel}">${getSafetyLevelText(safetyLevel)}</div>
+                    <div class="score-description">系统平均安全指数</div>
+                </div>
+                <div class="factors-list">
+                    <div class="factor-item">
+                        <span class="factor-name">非常安全</span>
+                        <div class="factor-score">
+                            <div class="factor-bar">
+                                <div class="factor-fill excellent-bg" style="width: ${(analysis.summary.safety_distribution.very_safe / analysis.devices.length) * 100}%"></div>
+                            </div>
+                            <span class="factor-value">${analysis.summary.safety_distribution.very_safe}</span>
+                        </div>
+                    </div>
+                    <div class="factor-item">
+                        <span class="factor-name">基本安全</span>
+                        <div class="factor-score">
+                            <div class="factor-bar">
+                                <div class="factor-fill good-bg" style="width: ${(analysis.summary.safety_distribution.safe / analysis.devices.length) * 100}%"></div>
+                            </div>
+                            <span class="factor-value">${analysis.summary.safety_distribution.safe}</span>
+                        </div>
+                    </div>
+                    <div class="factor-item">
+                        <span class="factor-name">需要改善</span>
+                        <div class="factor-score">
+                            <div class="factor-bar">
+                                <div class="factor-fill moderate-bg" style="width: ${(analysis.summary.safety_distribution.moderate / analysis.devices.length) * 100}%"></div>
+                            </div>
+                            <span class="factor-value">${analysis.summary.safety_distribution.moderate + analysis.summary.safety_distribution.risky + analysis.summary.safety_distribution.dangerous}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        // 加载单个设备健康评分
+        async function loadDeviceHealthScore(deviceId) {
+            try {
+                const response = await fetch(`/api/intelligence/health-score/${deviceId}`);
+                const health = await response.json();
+
+                displayDeviceHealth(health);
+            } catch (error) {
+                console.error('加载设备健康评分失败:', error);
+            }
+        }
+
+        // 显示设备健康度
+        function displayDeviceHealth(health) {
+            const container = document.getElementById('healthContent');
+
+            const html = `
+                <div class="score-display">
+                    <div class="score-circle" style="--score: ${health.score}; --score-color: ${getScoreColor(health.score)}">
+                        <span>${health.score}</span>
+                    </div>
+                    <div class="score-status ${health.status}">${getHealthStatusText(health.status)}</div>
+                    <div class="score-description">设备 ${health.device_id} 健康评分</div>
+                </div>
+                <div class="factors-list">
+                    ${Object.entries(health.factors || {}).map(([key, factor]) => `
+                        <div class="factor-item">
+                            <span class="factor-name">${getFactorName(key)}</span>
+                            <div class="factor-score">
+                                <div class="factor-bar">
+                                    <div class="factor-fill ${getStatusClass(factor.status)}-bg" style="width: ${factor.score}%"></div>
+                                </div>
+                                <span class="factor-value">${factor.score}</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        // 加载安全指数
+        async function loadSafetyIndex(deviceId) {
+            try {
+                const response = await fetch(`/api/intelligence/safety-index?device_id=${deviceId}`);
+                const safety = await response.json();
+
+                displaySafetyIndex(safety);
+            } catch (error) {
+                console.error('加载安全指数失败:', error);
+            }
+        }
+
+        // 显示安全指数
+        function displaySafetyIndex(safety) {
+            const container = document.getElementById('safetyContent');
+
+            if (safety.error) {
+                container.innerHTML = `<p style="text-align: center; color: #666;">${safety.error}</p>`;
+                return;
+            }
+
+            const html = `
+                <div class="score-display">
+                    <div class="score-circle" style="--score: ${safety.overall_safety_index}; --score-color: ${getScoreColor(safety.overall_safety_index)}">
+                        <span>${safety.overall_safety_index}</span>
+                    </div>
+                    <div class="score-status ${safety.safety_level}">${getSafetyLevelText(safety.safety_level)}</div>
+                    <div class="score-description">综合环境安全指数</div>
+                </div>
+                <div class="factors-list">
+                    ${Object.entries(safety.factors || {}).map(([key, value]) => `
+                        <div class="factor-item">
+                            <span class="factor-name">${getSafetyFactorName(key)}</span>
+                            <div class="factor-score">
+                                <div class="factor-bar">
+                                    <div class="factor-fill ${getScoreClass(value)}-bg" style="width: ${value}%"></div>
+                                </div>
+                                <span class="factor-value">${value}</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        // 加载设备趋势
+        async function loadDeviceTrends(deviceId) {
+            try {
+                const response = await fetch(`/api/intelligence/trends/${deviceId}`);
+                const trends = await response.json();
+
+                displayTrends(trends);
+            } catch (error) {
+                console.error('加载设备趋势失败:', error);
+            }
+        }
+
+        // 显示趋势数据
+        function displayTrends(trends) {
+            // 更新趋势图表
+            updateTrendsChart(trends);
+        }
+
+        // 更新趋势图表
+        function updateTrendsChart(trends) {
+            const ctx = document.getElementById('trendsChart').getContext('2d');
+
+            if (trendsChart) {
+                trendsChart.destroy();
+            }
+
+            const sensorTypes = Object.keys(trends.trends || {});
+            const datasets = sensorTypes.map((sensor, index) => {
+                const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'];
+                return {
+                    label: getSensorDisplayName(sensor),
+                    data: generateTrendData(trends.statistics[sensor]),
+                    borderColor: colors[index % colors.length],
+                    backgroundColor: colors[index % colors.length] + '20',
+                    tension: 0.4,
+                    fill: false
+                };
+            });
+
+            trendsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: generateTimeLabels(24),
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // 加载AI建议
+        async function loadAISuggestions(deviceId) {
+            try {
+                const response = await fetch(`/api/intelligence/ai-suggestions/${deviceId}`);
+                const suggestions = await response.json();
+
+                displayAISuggestions(suggestions);
+            } catch (error) {
+                console.error('加载AI建议失败:', error);
+            }
+        }
+
+        // 显示AI建议
+        function displayAISuggestions(suggestions) {
+          const container = document.getElementById('aiContent');
+          container.classList.remove('loading-spinner'); // 关键：解除固定高度
+
+            if (suggestions.error) {
+                container.innerHTML = `<div class="ai-error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>${suggestions.error}</p>
+                </div>`;
+                return;
+            }
+
+            const aiSuggestions = suggestions.ai_suggestions?.suggestions || [];
+
+            if (aiSuggestions.length === 0) {
+                container.innerHTML = `<div class="no-suggestions">
+                    <i class="fas fa-robot"></i>
+                    <p>AI正在分析您的设备数据...</p>
+                    <small>建议将稍后显示</small>
+                </div>`;
+                return;
+            }
+
+            // 按优先级分组
+            const groupedSuggestions = {
+                high: aiSuggestions.filter(s => s.priority === 'high'),
+                medium: aiSuggestions.filter(s => s.priority === 'medium'),
+                low: aiSuggestions.filter(s => s.priority === 'low')
+            };
+
+            const html = `
+                <div class="ai-suggestions-container">
+                    ${groupedSuggestions.high.length > 0 ? `
+                        <div class="priority-section high-priority">
+                            <h4><i class="fas fa-exclamation-circle"></i> 高优先级建议</h4>
+                            <div class="suggestions-grid">
+                                ${groupedSuggestions.high.map(suggestion => createSuggestionCard(suggestion, 'high')).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${groupedSuggestions.medium.length > 0 ? `
+                        <div class="priority-section medium-priority">
+                            <h4><i class="fas fa-exclamation-triangle"></i> 中优先级建议</h4>
+                            <div class="suggestions-grid">
+                                ${groupedSuggestions.medium.map(suggestion => createSuggestionCard(suggestion, 'medium')).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${groupedSuggestions.low.length > 0 ? `
+                        <div class="priority-section low-priority">
+                            <h4><i class="fas fa-info-circle"></i> 低优先级建议</h4>
+                            <div class="suggestions-grid">
+                                ${groupedSuggestions.low.map(suggestion => createSuggestionCard(suggestion, 'low')).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        // 创建建议卡片
+        function createSuggestionCard(suggestion, priority) {
+            // 截断过长的建议文本 - 更紧凑的长度
+            const maxLength = 40;
+            const truncatedSuggestion = suggestion.suggestion.length > maxLength
+                ? suggestion.suggestion.substring(0, maxLength) + '...'
+                : suggestion.suggestion;
+
+            return `
+                <div class="suggestion-card ${priority}-priority">
+                    <div class="suggestion-content">
+                        <div class="suggestion-header">
+                            <i class="fas fa-lightbulb"></i>
+                            <span class="suggestion-text">${truncatedSuggestion}</span>
+                        </div>
+
+                        <div class="suggestion-meta">
+                            <div class="meta-item">
+                                <i class="fas fa-clock"></i>
+                                <span>${suggestion.estimated_time}分</span>
+                            </div>
+                            <div class="meta-item">
+                                <i class="fas fa-star"></i>
+                                <span>${suggestion.cost_level}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 生成成本星级显示
+        function generateCostStars(level) {
+            const stars = [];
+            for (let i = 1; i <= 5; i++) {
+                if (i <= level) {
+                    stars.push('<i class="fas fa-star"></i>');
+                } else {
+                    stars.push('<i class="far fa-star"></i>');
+                }
+            }
+            return stars.join('');
+        }
+
+        // 显示系统建议
+        async function displaySystemRecommendations() {
+            try {
+                const response = await fetch('/api/intelligence/recommendations');
+                const recommendations = await response.json();
+
+                displayAISuggestions({ ai_suggestions: { suggestions: recommendations.recommendations.slice(0, 3) } });
+            } catch (error) {
+                console.error('加载系统建议失败:', error);
+            }
+        }
+
+        // 刷新所有数据
+        function refreshAllData() {
+            updateLastUpdateTime();
+            loadAllData();
+
+            // 显示刷新动画
+            const refreshBtn = document.querySelector('.banner-refresh i');
+            if (refreshBtn) {
+                refreshBtn.style.animation = 'spin 1s ease-in-out';
+                setTimeout(() => {
+                    refreshBtn.style.animation = '';
+                }, 1000);
+            }
+
+            // 通过Socket请求更新
+            if (socket && socket.connected) {
+                socket.emit('request_intelligence_update', { device_id: currentDeviceId === 'all' ? null : currentDeviceId });
+            }
+        }
+
+        // 更新最后更新时间
+        function updateLastUpdateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleString('zh-CN', {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+
+            const lastUpdateElement = document.getElementById('lastUpdate');
+            if (lastUpdateElement) {
+                lastUpdateElement.textContent = `最后更新: ${timeString}`;
+            }
+        }
+
+        // 显示加载状态
+        function showLoading() {
+            const loadingElements = [
+                'healthContent', 'safetyContent', 'aiContent', 'statisticsContent'
+            ];
+
+            loadingElements.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner"></i><span>加载中...</span></div>';
+                }
+            });
+        }
+
+        // 显示错误信息
+        function showError(message) {
+            console.error(message);
+            // 可以添加更友好的错误提示UI
+        }
+
+        // 工具函数
+        function getHealthStatus(score) {
+            if (score >= 90) return 'excellent';
+            if (score >= 75) return 'good';
+            if (score >= 60) return 'moderate';
+            if (score >= 40) return 'poor';
+            return 'critical';
+        }
+
+        function getHealthStatusText(status) {
+            const statusMap = {
+                'excellent': '优秀',
+                'good': '良好',
+                'moderate': '中等',
+                'poor': '较差',
+                'critical': '危险'
+            };
+            return statusMap[status] || '未知';
+        }
+
+        function getSafetyLevel(score) {
+            if (score >= 90) return 'very_safe';
+            if (score >= 75) return 'safe';
+            if (score >= 60) return 'moderate';
+            if (score >= 40) return 'risky';
+            return 'dangerous';
+        }
+
+        function getSafetyLevelText(level) {
+            const levelMap = {
+                'very_safe': '非常安全',
+                'safe': '安全',
+                'moderate': '中等',
+                'risky': '有风险',
+                'dangerous': '危险'
+            };
+            return levelMap[level] || '未知';
+        }
+
+        function getScoreColor(score) {
+            if (score >= 90) return '#4CAF50';
+            if (score >= 75) return '#8BC34A';
+            if (score >= 60) return '#FF9800';
+            if (score >= 40) return '#f44336';
+            return '#d32f2f';
+        }
+
+        function getScoreClass(score) {
+            if (score >= 75) return 'excellent';
+            if (score >= 60) return 'good';
+            if (score >= 40) return 'moderate';
+            return 'poor';
+        }
+
+        function getStatusClass(status) {
+            const classMap = {
+                'excellent': 'excellent',
+                'good': 'good',
+                'moderate': 'moderate',
+                'poor': 'poor',
+                'critical': 'poor'
+            };
+            return classMap[status] || 'moderate';
+        }
+
+        function getFactorName(key) {
+            const nameMap = {
+                'data_frequency': '数据频率',
+                'sensor_stability': '传感器稳定性',
+                'communication_reliability': '通信可靠性',
+                'environmental_normality': '环境正常性'
+            };
+            return nameMap[key] || key;
+        }
+
+        function getSafetyFactorName(key) {
+            const nameMap = {
+                'fire_risk': '火灾风险',
+                'temperature_safety': '温度安全',
+                'air_quality': '空气质量',
+                'lighting_safety': '光照安全'
+            };
+            return nameMap[key] || key;
+        }
+
+        function getSensorDisplayName(sensor) {
+            const nameMap = {
+                'flame': '火焰传感器',
+                'smoke': '烟雾传感器',
+                'temperature': '温度',
+                'humidity': '湿度',
+                'light_level': '光照强度'
+            };
+            return nameMap[sensor] || sensor;
+        }
+
+        function getPriorityText(priority) {
+            const priorityMap = {
+                'high': '高优先级',
+                'medium': '中优先级',
+                'low': '低优先级'
+            };
+            return priorityMap[priority] || priority;
+        }
+
+        function generateTrendData(stats) {
+            // 生成示例趋势数据
+            if (!stats || !stats.current) return [];
+
+            const current = stats.current;
+            const trend = stats.trend || 'stable';
+
+            let data = [];
+            for (let i = 0; i < 24; i++) {
+                let value = current;
+                if (trend === 'increasing') {
+                    value += (23 - i) * 2;
+                } else if (trend === 'decreasing') {
+                    value -= (23 - i) * 2;
+                } else {
+                    value += Math.random() * 10 - 5;
+                }
+                data.push(Math.max(0, value));
+            }
+            return data;
+        }
+
+        function generateTimeLabels(hours) {
+            const labels = [];
+            for (let i = hours - 1; i >= 0; i--) {
+                labels.push(`${i}小时前`);
+            }
+            return labels;
+        }
+
+        function updateIntelligenceDisplay(data) {
+            // 更新智能分析显示
+            if (data.health_score) {
+                displayDeviceHealth(data.health_score);
+            }
+            if (data.safety_index) {
+                displaySafetyIndex(data.safety_index);
+            }
+            if (data.analysis) {
+                displayTrends(data.analysis);
+            }
+        }
+    </script>
+
+    <!-- 统一底部导航栏 -->
+    {% include 'navigation.html' %}
+
+</body>
+</html>

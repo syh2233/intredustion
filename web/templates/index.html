@@ -24,6 +24,23 @@
             </div>
         </header>
 
+        <!-- 智能分析特色横幅 -->
+        <section class="intelligence-banner">
+            <div class="banner-content">
+                <div class="banner-icon">
+                    <i class="fas fa-brain"></i>
+                </div>
+                <div class="banner-text">
+                    <h3>🚀 全新智能分析功能</h3>
+                    <p>基于DeepSeek AI的设备健康评估 • 预测性维护 • 智能建议系统</p>
+                </div>
+                <a href="/intelligence" class="banner-btn">
+                    <i class="fas fa-arrow-right"></i>
+                    立即体验
+                </a>
+            </div>
+        </section>
+
         <!-- 实时监控面板 -->
         <section class="main-monitoring">
             <!-- 状态概览 -->
@@ -104,10 +121,10 @@
                 </div>
             </div>
 
-            <!-- 设备监控和报警历史并排布局 -->
+            <!-- 设备监控和最近报警并排布局 -->
             <div class="monitoring-row">
-                <!-- 设备状态网格 -->
-                <div class="devices-section">
+                <!-- 设备监控 -->
+                <div class="devices-monitor-section">
                     <div class="section-header">
                         <h3><i class="fas fa-microchip"></i> 设备监控</h3>
                         <button class="refresh-btn" onclick="refreshDevices()">
@@ -118,27 +135,11 @@
                         <!-- 设备卡片将通过JavaScript动态生成 -->
                     </div>
                 </div>
-            </div>
 
-            <!-- 从机监控和报警历史并排布局 -->
-            <div class="monitoring-row">
-                <!-- 从机监控面板 -->
-                <div class="slaves-section">
-                    <div class="section-header">
-                        <h3><i class="fas fa-network-wired"></i> 从机监控</h3>
-                        <button class="refresh-btn" onclick="refreshSlaves()">
-                            <i class="fas fa-sync-alt"></i> 刷新
-                        </button>
-                    </div>
-                    <div class="slaves-container" id="slaves-container">
-                        <!-- 从机卡片将通过JavaScript动态生成 -->
-                    </div>
-                </div>
-
-                <!-- 报警历史 -->
+                <!-- 最近报警 -->
                 <div class="alarm-section">
                     <div class="section-header">
-                        <h3><i class="fas fa-history"></i> 最近报警</h3>
+                        <h3><i class="fas fa-bell"></i> 最近报警</h3>
                         <div class="alarm-stats">
                             <span>今日: <strong id="today-alarms">0</strong></span>
                             <span>本周: <strong id="week-alarms">0</strong></span>
@@ -152,23 +153,8 @@
         </section>
     </div>
 
-    <!-- 底部导航 -->
-    <nav class="bottom-nav">
-        <div class="nav-container">
-            <a href="/" class="nav-item active">
-                <i class="fas fa-home"></i>
-                <span>首页</span>
-            </a>
-            <a href="/dashboard" class="nav-item">
-                <i class="fas fa-chart-line"></i>
-                <span>仪表板</span>
-            </a>
-            <a href="/monitor" class="nav-item">
-                <i class="fas fa-satellite-dish"></i>
-                <span>实时监控</span>
-            </a>
-        </div>
-    </nav>
+    <!-- 统一底部导航栏 -->
+    {% include 'navigation.html' %}
 
     <!-- 音频报警元素 -->
     <audio id="alarm-sound" preload="auto">

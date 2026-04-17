@@ -1,0 +1,391 @@
+<view class="container">
+  <!-- 智能分析横幅 -->
+  <view class="intelligence-banner">
+    <view class="banner-decoration"></view>
+    <view class="banner-content">
+      <view class="banner-icon">
+        <text class="icon-robot">🤖</text>
+      </view>
+      <view class="banner-text">
+        <view class="banner-title">智能分析中心</view>
+        <view class="banner-subtitle">AI驱动的设备健康管理系统</view>
+      </view>
+      <view class="banner-refresh" bindtap="refreshAllData">
+        <text class="refresh-icon">🔄</text>
+      </view>
+    </view>
+    <view class="wave-animation"></view>
+  </view>
+
+  <!-- 页面状态信息 -->
+  <view class="status-bar">
+    <view class="status-item">
+      <text class="status-dot online"></text>
+      <text class="status-text">系统在线</text>
+    </view>
+    <view class="status-item">
+      <text class="last-update">最后更新: {{lastUpdate}}</text>
+    </view>
+  </view>
+
+  <!-- 设备选择器 -->
+  <view class="device-selector">
+    <view class="selector-label">
+      <text class="selector-icon">📱</text>
+      <text>选择设备</text>
+    </view>
+    <picker class="device-picker" mode="selector" range="{{deviceList}}" range-key="label" value="{{selectedDeviceIndex}}" bindchange="onDeviceChange">
+      <view class="picker-display">
+        <text class="picker-text">{{deviceList[selectedDeviceIndex].label}}</text>
+        <text class="picker-arrow">▼</text>
+      </view>
+    </picker>
+  </view>
+
+  <!-- 系统统计概览（仅在汇总模式显示） -->
+  <view wx:if="{{currentDeviceId === 'all'}}" class="card system-stats">
+    <view class="card-header">
+      <view class="card-icon">
+        <text class="icon-stat">📊</text>
+      </view>
+      <view class="card-title">系统统计概览</view>
+    </view>
+    <view class="stats-grid">
+      <view class="stat-item">
+        <view class="stat-icon">📱</view>
+        <view class="stat-value">{{systemStats.totalDevices}}</view>
+        <view class="stat-label">设备总数</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-icon">💚</view>
+        <view class="stat-value">{{systemStats.avgHealthScore}}</view>
+        <view class="stat-label">平均健康分</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-icon">🛡️</view>
+        <view class="stat-value">{{systemStats.avgSafetyIndex}}</view>
+        <view class="stat-label">平均安全指数</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-icon">⚠️</view>
+        <view class="stat-value">{{systemStats.warningsToday}}</view>
+        <view class="stat-label">今日预警</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 设备健康度和环境安全指数并排显示 -->
+  <view class="cards-row">
+    <!-- 设备健康度评估 -->
+    <view class="card health-card">
+      <view class="card-header">
+        <view class="card-icon health-icon">
+          <text class="icon-health">💚</text>
+        </view>
+        <view class="card-title">
+          <text>设备健康度</text>
+          <text wx:if="{{loading.health}}" class="loading-text">分析中...</text>
+        </view>
+      </view>
+
+      <view wx:if="{{errors.health}}" class="error-section">
+        <text class="error-icon">⚠️</text>
+        <text class="error-text">{{errors.health}}</text>
+        <button class="retry-btn" bindtap="retryHealth" size="mini">重试</button>
+      </view>
+
+      <view wx:else class="health-content">
+        <view class="health-score-container">
+          <view class="score-circle" style="border-color: {{deviceHealth.color}}">
+            <view class="score-value" style="color: {{deviceHealth.color}}">
+              {{deviceHealth.score}}
+            </view>
+            <view class="score-unit">分</view>
+          </view>
+          <view class="health-info">
+            <view class="health-status" style="color: {{deviceHealth.color}}">
+              <text class="status-icon">{{deviceHealth.score >= 90 ? '🟢' : deviceHealth.score >= 70 ? '🟡' : '🔴'}}</text>
+              {{deviceHealth.statusText}}
+            </view>
+            <view wx:if="{{currentDeviceId !== 'all'}}" class="health-factors">
+              <view wx:for="{{deviceHealth.factors}}" wx:key="name" class="factor-item">
+                <view class="factor-progress">
+                  <view class="progress-bar">
+                    <view class="progress-fill" style="width: {{item.percentage}}%; background: {{item.color}}"></view>
+                  </view>
+                  <text class="factor-name">{{item.name}}</text>
+                </view>
+                <text class="factor-value">{{item.score}}</text>
+              </view>
+            </view>
+            <view wx:else class="health-distribution">
+              <view class="distribution-item">
+                <text class="dist-label">优秀</text>
+                <view class="dist-bar">
+                  <view class="dist-fill excellent" style="width: {{healthDistribution.excellent}}%"></view>
+                </view>
+                <text class="dist-value">{{healthDistribution.excellentCount}}</text>
+              </view>
+              <view class="distribution-item">
+                <text class="dist-label">良好</text>
+                <view class="dist-bar">
+                  <view class="dist-fill good" style="width: {{healthDistribution.good}}%"></view>
+                </view>
+                <text class="dist-value">{{healthDistribution.goodCount}}</text>
+              </view>
+              <view class="distribution-item">
+                <text class="dist-label">需关注</text>
+                <view class="dist-bar">
+                  <view class="dist-fill moderate" style="width: {{healthDistribution.moderate}}%"></view>
+                </view>
+                <text class="dist-value">{{healthDistribution.moderateCount}}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 环境安全指数 -->
+    <view class="card safety-card">
+      <view class="card-header">
+        <view class="card-icon safety-icon">
+          <text class="icon-safety">🛡️</text>
+        </view>
+        <view class="card-title">
+          <text>环境安全指数</text>
+          <text wx:if="{{loading.safety}}" class="loading-text">检测中...</text>
+        </view>
+      </view>
+
+      <view wx:if="{{errors.safety}}" class="error-section">
+        <text class="error-icon">⚠️</text>
+        <text class="error-text">{{errors.safety}}</text>
+        <button class="retry-btn" bindtap="retrySafety" size="mini">重试</button>
+      </view>
+
+      <view wx:else class="safety-content">
+        <view class="safety-score-container">
+          <view class="safety-circle" style="border-color: {{safetyIndex.color}}; background: {{safetyIndex.backgroundColor}}">
+            <view class="safety-value" style="color: {{safetyIndex.color}}">
+              {{safetyIndex.score}}
+            </view>
+            <view class="safety-unit">分</view>
+          </view>
+          <view class="safety-info">
+            <view class="safety-level" style="color: {{safetyIndex.color}}">
+              <text class="safety-badge">{{safetyIndex.levelText}}</text>
+            </view>
+            <view wx:if="{{currentDeviceId !== 'all' && safetyIndex.factors.length > 0}}" class="safety-factors">
+              <view wx:for="{{safetyIndex.factors}}" wx:key="name" class="safety-factor">
+                <view class="factor-icon">{{item.name.includes('温度') ? '🌡️' : item.name.includes('湿度') ? '💧' : item.name.includes('空气质量') ? '🌬️' : '💡'}}</view>
+                <view class="factor-details">
+                  <text class="safety-factor-name">{{item.name}}</text>
+                  <text class="safety-factor-value">{{item.value}}</text>
+                </view>
+              </view>
+            </view>
+            <view wx:else class="safety-distribution">
+              <view class="distribution-item">
+                <text class="dist-label">非常安全</text>
+                <view class="dist-bar">
+                  <view class="dist-fill excellent" style="width: {{safetyDistribution.verySafe}}%"></view>
+                </view>
+                <text class="dist-value">{{safetyDistribution.verySafeCount}}</text>
+              </view>
+              <view class="distribution-item">
+                <text class="dist-label">基本安全</text>
+                <view class="dist-bar">
+                  <view class="dist-fill good" style="width: {{safetyDistribution.safe}}%"></view>
+                </view>
+                <text class="dist-value">{{safetyDistribution.safeCount}}</text>
+              </view>
+              <view class="distribution-item">
+                <text class="dist-label">需改善</text>
+                <view class="dist-bar">
+                  <view class="dist-fill moderate" style="width: {{safetyDistribution.moderate}}%"></view>
+                </view>
+                <text class="dist-value">{{safetyDistribution.moderateCount}}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 传感器数据统计（单设备模式） -->
+  <view wx:if="{{currentDeviceId !== 'all'}}" class="card statistics-card">
+    <view class="card-header">
+      <view class="card-icon statistics-icon">
+        <text class="icon-statistics">📡</text>
+      </view>
+      <view class="card-title">
+        <text>传感器数据统计</text>
+        <text wx:if="{{loading.statistics}}" class="loading-text">统计中...</text>
+      </view>
+    </view>
+
+    <view wx:if="{{errors.statistics}}" class="error-section">
+      <text class="error-icon">⚠️</text>
+      <text class="error-text">{{errors.statistics}}</text>
+      <button class="retry-btn" bindtap="retryStatistics" size="mini">重试</button>
+    </view>
+
+    <view wx:else class="sensor-stats">
+      <view class="sensor-row">
+        <view class="sensor-item">
+          <view class="sensor-header">
+            <text class="sensor-icon">🔥</text>
+            <text class="sensor-name">火焰传感器</text>
+          </view>
+          <view class="sensor-data">
+            <text class="sensor-avg">{{statistics.flame.avg}}</text>
+            <text class="sensor-range">({{statistics.flame.min}}~{{statistics.flame.max}})</text>
+          </view>
+          <view class="sensor-trend {{statistics.flame.trend}}">
+            <text class="trend-icon">{{statistics.flame.trend === 'up' ? '📈' : statistics.flame.trend === 'down' ? '📉' : '➡️'}}</text>
+          </view>
+        </view>
+
+        <view class="sensor-item">
+          <view class="sensor-header">
+            <text class="sensor-icon">💨</text>
+            <text class="sensor-name">烟雾传感器</text>
+          </view>
+          <view class="sensor-data">
+            <text class="sensor-avg">{{statistics.smoke.avg}}</text>
+            <text class="sensor-range">({{statistics.smoke.min}}~{{statistics.smoke.max}})</text>
+          </view>
+          <view class="sensor-trend {{statistics.smoke.trend}}">
+            <text class="trend-icon">{{statistics.smoke.trend === 'up' ? '📈' : statistics.smoke.trend === 'down' ? '📉' : '➡️'}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="sensor-row">
+        <view class="sensor-item">
+          <view class="sensor-header">
+            <text class="sensor-icon">🌡️</text>
+            <text class="sensor-name">温度</text>
+          </view>
+          <view class="sensor-data">
+            <text class="sensor-avg">{{statistics.temperature.avg}}°C</text>
+            <text class="sensor-range">{{statistics.temperature.min}}°~{{statistics.temperature.max}}°</text>
+          </view>
+          <view class="sensor-trend {{statistics.temperature.trend}}">
+            <text class="trend-icon">{{statistics.temperature.trend === 'up' ? '📈' : statistics.temperature.trend === 'down' ? '📉' : '➡️'}}</text>
+          </view>
+        </view>
+
+        <view class="sensor-item">
+          <view class="sensor-header">
+            <text class="sensor-icon">💧</text>
+            <text class="sensor-name">湿度</text>
+          </view>
+          <view class="sensor-data">
+            <text class="sensor-avg">{{statistics.humidity.avg}}%</text>
+            <text class="sensor-range">{{statistics.humidity.min}}%~{{statistics.humidity.max}}%</text>
+          </view>
+          <view class="sensor-trend {{statistics.humidity.trend}}">
+            <text class="trend-icon">{{statistics.humidity.trend === 'up' ? '📈' : statistics.humidity.trend === 'down' ? '📉' : '➡️'}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="sensor-row">
+        <view class="sensor-item">
+          <view class="sensor-header">
+            <text class="sensor-icon">💡</text>
+            <text class="sensor-name">光照强度</text>
+          </view>
+          <view class="sensor-data">
+            <text class="sensor-avg">{{statistics.lightLevel.avg}}</text>
+            <text class="sensor-range">({{statistics.lightLevel.min}}~{{statistics.lightLevel.max}})</text>
+          </view>
+          <view class="sensor-trend {{statistics.lightLevel.trend}}">
+            <text class="trend-icon">{{statistics.lightLevel.trend === 'up' ? '📈' : statistics.lightLevel.trend === 'down' ? '📉' : '➡️'}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 趋势图表（单设备模式） -->
+  <view wx:if="{{currentDeviceId !== 'all'}}" class="card trends-card">
+    <view class="card-header">
+      <view class="card-icon trends-icon">
+        <text class="icon-trends">📈</text>
+      </view>
+      <view class="card-title">
+        <text>数据趋势分析</text>
+        <text wx:if="{{loading.trends}}" class="loading-text">加载中...</text>
+      </view>
+    </view>
+
+    <view wx:if="{{errors.trends}}" class="error-section">
+      <text class="error-icon">⚠️</text>
+      <text class="error-text">{{errors.trends}}</text>
+      <button class="retry-btn" bindtap="retryTrends" size="mini">重试</button>
+    </view>
+
+    <view wx:else class="trends-chart-container">
+      <ec-canvas id="trendsChart" canvas-id="trends-chart" ec="{{trendsChart}}"></ec-canvas>
+    </view>
+  </view>
+
+  <!-- AI智能建议 -->
+  <view class="card ai-suggestions-card">
+    <view class="card-header">
+      <view class="card-icon ai-icon">
+        <text class="icon-ai">🤖</text>
+      </view>
+      <view class="card-title">
+        <text>AI智能建议</text>
+        <text wx:if="{{loading.ai}}" class="loading-text">AI分析中...</text>
+      </view>
+    </view>
+
+    <view wx:if="{{errors.ai}}" class="error-section">
+      <text class="error-icon">⚠️</text>
+      <text class="error-text">{{errors.ai}}</text>
+      <button class="retry-btn" bindtap="retryAi" size="mini">重试</button>
+    </view>
+
+    <view wx:else class="ai-suggestions">
+      <view wx:if="{{aiSuggestions.length === 0}}" class="no-suggestions">
+        <text class="no-data-icon">📊</text>
+        <text class="no-data-text">暂无AI建议，请等待更多数据积累</text>
+      </view>
+
+      <view wx:for="{{aiSuggestions}}" wx:key="index" class="suggestion-item {{item.priority}}">
+        <view class="suggestion-header">
+          <view class="suggestion-icon">
+            <text class="priority-icon {{item.priority}}">{{item.priority === 'high' ? '🚨' : item.priority === 'medium' ? '⚠️' : '💡'}}</text>
+          </view>
+          <view class="suggestion-content">
+            <view class="suggestion-title">{{item.suggestion}}</view>
+            <view class="suggestion-description">{{item.reasoning}}</view>
+            <view wx:if="{{item.category}}" class="suggestion-meta">
+              <view class="meta-tags">
+                <text class="meta-tag category">{{item.category}}</text>
+                <text class="meta-tag time">⏱️ {{item.estimated_time}}分钟</text>
+                <text class="meta-tag cost">💰 {{item.cost_level}}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 页面底部说明 -->
+  <view class="footer">
+    <view class="note">
+      <text>* 分析基于设备最近20条数据</text>
+    </view>
+    <view class="note">
+      <text>* AI建议由DeepSeek智能分析引擎提供</text>
+    </view>
+  </view>
+</view>

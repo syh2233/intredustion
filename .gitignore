@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Test caches
+.pytest_cache/
+
+# Virtual env
+.venv/
+
+# Node
+node_modules/
+
+# Electron builder outputs
+web/electron/dist/
+
+# PyInstaller outputs
+build/
+*.spec
+web/dist/
+
+# IDE
+.idea/
+
+# Logs
+*.log

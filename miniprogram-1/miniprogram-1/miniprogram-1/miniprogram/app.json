@@ -1,0 +1,19 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/alarm/alarm",
+    "pages/history/history",
+    "pages/chart/chart",
+    "pages/slaveData/slaveData",
+    "pages/light/light",
+    "pages/intelligence/intelligence"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#1677ff",
+    "navigationBarTitleText": "智能火灾预警设备",
+    "navigationBarTextStyle": "white"
+  },
+  "sitemapLocation": "sitemap.json"
+}
+    
